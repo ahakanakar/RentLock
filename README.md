@@ -148,13 +148,15 @@ Projeyi uçtan uca test etmek için hazır senaryo.
 ## 🔄 Kiralama Akışı
 
 ```
-1. Ekipman Sahibi → create_rental()      → Ekipmanı listeler (fiyat, süre, depozito)
-2. Kiracı         → start_rental()       → Depozitoyu escrow'a kilitler
-3. Oracle         → confirm_payment()    → Ödemeyi doğrular, kiralama başlar
-4. Kiracı         → end_rental()         → Ekipmanı iade eder
-5a. Sorunsuz      → release_deposit()    → Depozito kiracıya iade edilir ✅
-5b. Hasar varsa   → open_dispute()       → Dispute süreci başlar ⚠️
-6. Admin          → resolve_dispute()    → Depozito sahibine veya kiracıya aktarılır
+0. Admin          → initialize()         → Kontratı başlatır (admin + USDC adresi)
+1. Ekipman Sahibi → create_rental()      → Ekipmanı listeler (fiyat, depozito)
+2. Kiracı         → deposit()            → Depozitoyu kontrata kilitler (USDC)
+3. Ekipman Sahibi → start_rental()       → Kiralama başlar, zaman damgası kaydedilir
+4. Sahip/Kiracı   → submit_proof()       → Teslim anı fotoğraf hash'i zincire yazılır
+5. Sahip/Kiracı   → end_rental()         → İade hash'i ile teslim hash'i karşılaştırılır
+   5a. Eşleşirse  →                      → Depozito kiracıya iade edilir ✅
+   5b. Uyuşmazsa  →                      → Depozito sahibine aktarılır ⚠️
+6. Herkes         → get_status()         → Kiralama durumunu sorgular
 ```
 
 ---
@@ -164,15 +166,104 @@ Projeyi uçtan uca test etmek için hazır senaryo.
 | Araç | Versiyon | Kullanım |
 |------|----------|----------|
 | Rust | 1.74+ | Soroban kontrat geliştirme |
-| Soroban CLI | 21.x+ | Kontrat build, deploy, invoke |
+| Stellar CLI | 22.x+ | Kontrat build, deploy, invoke |
 | Node.js | 18+ | Oracle backend |
 | npm/yarn | — | Paket yönetimi |
 | Freighter | — | Tarayıcı cüzdan eklentisi |
 
 ---
 
+## 🚀 Deploy Rehberi (Stellar Testnet)
+
+### 1. Gerekli Araçları Kur
+
+```bash
+# Rust kur
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# WASM target ekle
+rustup target add wasm32-unknown-unknown
+
+# Stellar CLI kur
+cargo install --locked stellar-cli --features opt
+```
+
+### 2. Testnet Hesabı Oluştur
+
+```bash
+# Yeni bir anahtar çifti oluştur
+stellar keys generate --global deployer --network testnet
+
+# Friendbot ile fonla (otomatik 10.000 XLM)
+stellar keys fund deployer --network testnet
+
+# Adresini gör
+stellar keys address deployer
+```
+
+### 3. Kontratı Derle
+
+```bash
+# Proje kök dizininde
+stellar contract build
+# Çıktı: target/wasm32-unknown-unknown/release/rentlock.wasm
+```
+
+### 4. Kontratı Deploy Et
+
+```bash
+# Testnet'e deploy et
+stellar contract deploy \
+  --wasm target/wasm32-unknown-unknown/release/rentlock.wasm \
+  --source deployer \
+  --network testnet
+
+# Çıktı: CONTRACT_ID (örn: CABC...XYZ)
+```
+
+### 5. Kontratı Initialize Et
+
+```bash
+# USDC Testnet SAC adresi ile initialize et
+stellar contract invoke \
+  --id <CONTRACT_ID> \
+  --source deployer \
+  --network testnet \
+  -- \
+  initialize \
+  --admin <DEPLOYER_ADDRESS> \
+  --token_address <USDC_SAC_ADDRESS>
+```
+
+### 6. Fonksiyonları Test Et
+
+```bash
+# Yeni kiralama oluştur
+stellar contract invoke \
+  --id <CONTRACT_ID> \
+  --source deployer \
+  --network testnet \
+  -- \
+  create_rental \
+  --owner <OWNER_ADDRESS> \
+  --equipment_id "DRONE-001" \
+  --daily_price 10000000 \
+  --deposit_amount 50000000
+
+# Durum sorgula
+stellar contract invoke \
+  --id <CONTRACT_ID> \
+  --network testnet \
+  -- \
+  get_status \
+  --rental_id 1
+```
+
+---
+
 ## 📝 Notlar
 
-- Henüz hiçbir dosyada kod bulunmamaktadır. Bu aşamada sadece klasör yapısı ve dosya iskeletleri oluşturulmuştur.
-- Geliştirme sırası: **Kontrat → Oracle → Frontend → Demo** şeklinde ilerleyecektir.
-- Testnet üzerinde çalışılacaktır (Stellar Testnet / Futurenet).
+- Soroban akıllı kontrat kodu tamamlanmıştır (`contracts/rentlock/src/`)
+- USDC miktarları 7 ondalık basamak kullanır (1 USDC = 10_000_000)
+- Geliştirme sırası: **Kontrat ✅ → Oracle → Frontend → Demo**
+- Testnet üzerinde çalışılacaktır (Stellar Testnet)
