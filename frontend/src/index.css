@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Global Styles ─────────────────────────── */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #0d0f1a 0%, #13152a 50%, #1a1d2e 100%);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── Scrollbar ─────────────────────────────── */
+
+::-webkit-scrollbar {
+    width: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: #13152a;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #4c6ef5;
+    border-radius: 3px;
+}
+
+/* ─── Glassmorphism Utility ─────────────────── */
+
+@layer components {
+    .glass {
+        @apply bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl;
+    }
+
+    .glass-hover {
+        @apply glass transition-all duration-300 hover:bg-white/10 hover:border-white/20 hover:shadow-lg hover:shadow-stellar-500/10;
+    }
+
+    .btn-primary {
+        @apply px-6 py-3 bg-gradient-to-r from-stellar-600 to-stellar-500 text-white font-semibold rounded-xl transition-all duration-300 hover:from-stellar-500 hover:to-stellar-400 hover:shadow-lg hover:shadow-stellar-500/30 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-none disabled:active:scale-100;
+    }
+
+    .btn-danger {
+        @apply px-6 py-3 bg-gradient-to-r from-red-600 to-red-500 text-white font-semibold rounded-xl transition-all duration-300 hover:from-red-500 hover:to-red-400 hover:shadow-lg hover:shadow-red-500/30 active:scale-95;
+    }
+
+    .btn-success {
+        @apply px-6 py-3 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-semibold rounded-xl transition-all duration-300 hover:from-emerald-500 hover:to-emerald-400 hover:shadow-lg hover:shadow-emerald-500/30 active:scale-95;
+    }
+
+    .input-field {
+        @apply w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-stellar-500 focus:ring-1 focus:ring-stellar-500/50 transition-all duration-200;
+    }
+
+    .status-badge {
+        @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold;
+    }
+}
