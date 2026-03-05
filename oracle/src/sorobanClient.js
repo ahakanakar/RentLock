@@ -9,6 +9,7 @@
  */
 
 import * as StellarSdk from "@stellar/stellar-sdk";
+import * as rpc from "@stellar/stellar-sdk/rpc";
 
 // ─── Yapılandırma ───────────────────────────────────────
 
@@ -20,7 +21,7 @@ const ORACLE_SECRET_KEY = process.env.ORACLE_SECRET_KEY;
 // ─── İstemciler ─────────────────────────────────────────
 
 /** Soroban RPC sunucusuna bağlantı */
-const server = new StellarSdk.SorobanRpc.Server(RPC_URL);
+const server = new rpc.Server(RPC_URL);
 
 /** Oracle cüzdanı (kontrat çağrıları için imza atar) */
 const oracleKeypair = StellarSdk.Keypair.fromSecret(ORACLE_SECRET_KEY);
@@ -64,13 +65,13 @@ export async function invokeContract(functionName, args = []) {
         console.log(`⏳ [Soroban] Simülasyon yapılıyor...`);
         const simulated = await server.simulateTransaction(transaction);
 
-        if (StellarSdk.SorobanRpc.Api.isSimulationError(simulated)) {
+        if (rpc.Api.isSimulationError(simulated)) {
             console.error(`❌ [Soroban] Simülasyon hatası:`, simulated.error);
             throw new Error(`Simülasyon hatası: ${simulated.error}`);
         }
 
         // Simülasyon sonucuyla transaction'ı hazırla
-        const preparedTx = StellarSdk.SorobanRpc.assembleTransaction(
+        const preparedTx = rpc.assembleTransaction(
             transaction,
             simulated
         );
@@ -128,7 +129,7 @@ export async function queryContract(functionName, args = []) {
 
         const simulated = await server.simulateTransaction(transaction);
 
-        if (StellarSdk.SorobanRpc.Api.isSimulationError(simulated)) {
+        if (rpc.Api.isSimulationError(simulated)) {
             console.error(`❌ [Soroban] Sorgu hatası:`, simulated.error);
             throw new Error(`Sorgu hatası: ${simulated.error}`);
         }
