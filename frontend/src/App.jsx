@@ -1,8 +1,9 @@
 /**
  * RentLock — Ana Uygulama
  *
- * 3 sekmeli layout: Kiraya Veren, Kiracı, Kontrat Durumu
- * Freighter cüzdan bağlantısı + kontrat etkileşimleri
+ * Rol bazlı ayrım: Giriş ekranında cüzdan bağla + rol seç.
+ * Seçilen rol'e göre ilgili dashboard açılır.
+ * Roller arası geçiş yok, çıkış ile tekrar rol seçim ekranına dönülür.
  */
 
 import { useState } from "react";
@@ -10,22 +11,143 @@ import { useWallet } from "./hooks/useWallet.js";
 import { useContract } from "./hooks/useContract.js";
 import OwnerPanel from "./components/OwnerPanel.jsx";
 import RenterPanel from "./components/RenterPanel.jsx";
-import AdminPanel from "./components/AdminPanel.jsx";
-
-const TABS = [
-    { id: "owner", label: "Kiraya Veren", icon: "🏠", desc: "Ekipman yönetimi" },
-    { id: "renter", label: "Kiracı", icon: "🔑", desc: "Ekipman kiralama" },
-    { id: "admin", label: "Kontrat Durumu", icon: "📊", desc: "Canlı takip" },
-];
 
 export default function App() {
-    const [activeTab, setActiveTab] = useState("owner");
+    const [role, setRole] = useState(null); // null | "owner" | "renter"
     const wallet = useWallet();
     const contract = useContract();
 
+    // Çıkış: hem rolü sıfırla hem cüzdanı kes
+    const handleLogout = () => {
+        setRole(null);
+        wallet.disconnect();
+    };
+
+    // ─── Giriş Ekranı ───────────────────────────────────
+    if (!wallet.connected || !role) {
+        return (
+            <div className="min-h-screen flex flex-col">
+                {/* Arka plan dekorasyon */}
+                <div className="fixed inset-0 overflow-hidden pointer-events-none">
+                    <div className="absolute top-[-200px] left-1/2 -translate-x-1/2 w-[800px] h-[800px] bg-stellar-600/5 rounded-full blur-[150px]" />
+                    <div className="absolute bottom-[-300px] right-[-200px] w-[600px] h-[600px] bg-stellar-400/3 rounded-full blur-[120px]" />
+                </div>
+
+                <div className="flex-1 flex items-center justify-center px-6 relative z-10">
+                    <div className="w-full max-w-xl">
+                        {/* Logo & Başlık */}
+                        <div className="text-center mb-10">
+                            <div className="w-20 h-20 mx-auto rounded-2xl bg-gradient-to-br from-stellar-600/30 to-stellar-400/10 flex items-center justify-center text-4xl mb-6 border border-stellar-500/20 shadow-lg shadow-stellar-500/10">
+                                🔐
+                            </div>
+                            <h1 className="text-4xl font-extrabold bg-gradient-to-r from-white via-white to-white/60 bg-clip-text text-transparent mb-3">
+                                RentLock
+                            </h1>
+                            <p className="text-white/40 text-sm max-w-sm mx-auto leading-relaxed">
+                                Stellar Soroban üzerinde merkezi olmayan ekipman kiralama protokolü.
+                                Güvenli depozito, şeffaf ödeme, hash tabanlı kanıt sistemi.
+                            </p>
+                        </div>
+
+                        {/* Adım 1: Cüzdan Bağlantısı */}
+                        {!wallet.connected ? (
+                            <div className="glass p-8 text-center">
+                                <div className="text-3xl mb-4">🔗</div>
+                                <h2 className="text-xl font-bold text-white mb-2">Cüzdanını Bağla</h2>
+                                <p className="text-white/40 text-sm mb-6">
+                                    Devam etmek için Freighter cüzdanınızı bağlayın.
+                                    Yüklü değilse demo modda çalışır.
+                                </p>
+                                <button
+                                    onClick={wallet.connect}
+                                    disabled={wallet.loading}
+                                    className="btn-primary text-lg px-10 py-4 w-full"
+                                >
+                                    {wallet.loading ? (
+                                        <span className="animate-spin">⏳</span>
+                                    ) : (
+                                        <>🔗 Cüzdan Bağla</>
+                                    )}
+                                </button>
+                                <p className="text-white/15 text-xs mt-4">
+                                    Freighter yüklü değilse mock modda çalışır
+                                </p>
+                            </div>
+                        ) : (
+                            /* Adım 2: Rol Seçimi */
+                            <div>
+                                {/* Bağlı cüzdan bilgisi */}
+                                <div className="flex items-center justify-center gap-2 mb-6">
+                                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                                    <span className="text-white/50 text-sm font-mono">
+                                        {wallet.address.length > 12
+                                            ? `${wallet.address.slice(0, 6)}...${wallet.address.slice(-4)}`
+                                            : wallet.address}
+                                    </span>
+                                    {wallet.isMock && (
+                                        <span className="px-2 py-0.5 rounded-md bg-yellow-500/10 text-yellow-400 text-[10px] font-semibold border border-yellow-500/20">
+                                            MOCK
+                                        </span>
+                                    )}
+                                </div>
+
+                                <h2 className="text-center text-lg font-semibold text-white/70 mb-5">
+                                    Rolünüzü seçin
+                                </h2>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    {/* Kiraya Veren Butonu */}
+                                    <button
+                                        onClick={() => setRole("owner")}
+                                        className="glass-hover p-8 text-center group cursor-pointer"
+                                    >
+                                        <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-stellar-600/20 to-stellar-400/5 flex items-center justify-center text-3xl mb-4 border border-stellar-500/10 group-hover:border-stellar-500/30 group-hover:shadow-lg group-hover:shadow-stellar-500/10 transition-all">
+                                            🏠
+                                        </div>
+                                        <h3 className="text-lg font-bold text-white mb-1">Kiraya Veren</h3>
+                                        <p className="text-white/30 text-xs leading-relaxed">
+                                            Ekipmanlarınızı listeleyin, kiralama sürecini yönetin
+                                        </p>
+                                    </button>
+
+                                    {/* Kiracı Butonu */}
+                                    <button
+                                        onClick={() => setRole("renter")}
+                                        className="glass-hover p-8 text-center group cursor-pointer"
+                                    >
+                                        <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-emerald-600/20 to-emerald-400/5 flex items-center justify-center text-3xl mb-4 border border-emerald-500/10 group-hover:border-emerald-500/30 group-hover:shadow-lg group-hover:shadow-emerald-500/10 transition-all">
+                                            🔑
+                                        </div>
+                                        <h3 className="text-lg font-bold text-white mb-1">Kiracı</h3>
+                                        <p className="text-white/30 text-xs leading-relaxed">
+                                            Ekipman kiralayın, depozito yatırın, iade edin
+                                        </p>
+                                    </button>
+                                </div>
+
+                                <button
+                                    onClick={wallet.disconnect}
+                                    className="w-full mt-4 py-2 text-sm text-white/20 hover:text-white/50 transition-colors text-center"
+                                >
+                                    Cüzdan bağlantısını kes
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Footer */}
+                <footer className="text-center py-4 text-xs text-white/15">
+                    RentLock Protocol © 2025 — Powered by Stellar Soroban
+                </footer>
+            </div>
+        );
+    }
+
+    // ─── Dashboard ───────────────────────────────────────
     return (
-        <div className="min-h-screen">
-            {/* ─── Header ─── */}
+        <div className="min-h-screen flex flex-col">
+            {/* Header */}
             <header className="border-b border-white/5">
                 <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -37,86 +159,48 @@ export default function App() {
                                 RentLock
                             </h1>
                             <p className="text-[10px] text-white/30 -mt-0.5 tracking-wider uppercase">
-                                Decentralized Equipment Rental
+                                {role === "owner" ? "Kiraya Veren Paneli" : "Kiracı Paneli"}
                             </p>
                         </div>
                     </div>
 
-                    {/* Cüzdan Bağlantısı */}
                     <div className="flex items-center gap-3">
-                        {wallet.connected ? (
-                            <div className="flex items-center gap-3">
-                                {wallet.isMock && (
-                                    <span className="px-2 py-0.5 rounded-md bg-yellow-500/10 text-yellow-400 text-[10px] font-semibold border border-yellow-500/20">
-                                        MOCK MODE
-                                    </span>
-                                )}
-                                <div className="glass px-4 py-2 flex items-center gap-2">
-                                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                                    <span className="text-sm text-white/70 font-mono">
-                                        {wallet.address.length > 12
-                                            ? `${wallet.address.slice(0, 6)}...${wallet.address.slice(-4)}`
-                                            : wallet.address}
-                                    </span>
-                                </div>
-                                <button
-                                    onClick={wallet.disconnect}
-                                    className="px-3 py-2 rounded-xl text-sm text-white/40 hover:text-white/70 hover:bg-white/5 transition-all"
-                                >
-                                    Çıkış
-                                </button>
-                            </div>
-                        ) : (
-                            <button
-                                onClick={wallet.connect}
-                                disabled={wallet.loading}
-                                className="btn-primary text-sm"
-                            >
-                                {wallet.loading ? (
-                                    <span className="animate-spin">⏳</span>
-                                ) : (
-                                    <>🔗 Cüzdan Bağla</>
-                                )}
-                            </button>
+                        {/* Rol badge */}
+                        <span className={`px-3 py-1 rounded-lg text-xs font-semibold border ${role === "owner"
+                                ? "bg-stellar-500/10 text-stellar-400 border-stellar-500/20"
+                                : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                            }`}>
+                            {role === "owner" ? "🏠 Kiraya Veren" : "🔑 Kiracı"}
+                        </span>
+
+                        {wallet.isMock && (
+                            <span className="px-2 py-0.5 rounded-md bg-yellow-500/10 text-yellow-400 text-[10px] font-semibold border border-yellow-500/20">
+                                MOCK
+                            </span>
                         )}
+
+                        {/* Cüzdan adresi */}
+                        <div className="glass px-4 py-2 flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                            <span className="text-sm text-white/70 font-mono">
+                                {wallet.address.length > 12
+                                    ? `${wallet.address.slice(0, 6)}...${wallet.address.slice(-4)}`
+                                    : wallet.address}
+                            </span>
+                        </div>
+
+                        {/* Çıkış butonu */}
+                        <button
+                            onClick={handleLogout}
+                            className="px-4 py-2 rounded-xl text-sm text-white/40 hover:text-white hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all"
+                        >
+                            🚪 Çıkış
+                        </button>
                     </div>
                 </div>
             </header>
 
-            {/* ─── Tab Navigation ─── */}
-            <nav className="border-b border-white/5">
-                <div className="max-w-6xl mx-auto px-6">
-                    <div className="flex gap-1">
-                        {TABS.map((tab) => (
-                            <button
-                                key={tab.id}
-                                onClick={() => setActiveTab(tab.id)}
-                                className={`
-                  relative px-6 py-4 text-sm font-medium transition-all duration-200
-                  ${activeTab === tab.id
-                                        ? "text-white"
-                                        : "text-white/40 hover:text-white/70"
-                                    }
-                `}
-                            >
-                                <span className="flex items-center gap-2">
-                                    <span className="text-lg">{tab.icon}</span>
-                                    <span>{tab.label}</span>
-                                    <span className="hidden sm:inline text-xs text-white/20">
-                                        {tab.desc}
-                                    </span>
-                                </span>
-                                {/* Active indicator */}
-                                {activeTab === tab.id && (
-                                    <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-gradient-to-r from-stellar-500 to-stellar-400 rounded-full" />
-                                )}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-            </nav>
-
-            {/* ─── Error Banner ─── */}
+            {/* Error Banner */}
             {contract.error && (
                 <div className="max-w-6xl mx-auto px-6 mt-4">
                     <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 flex items-center gap-2 text-red-400 text-sm">
@@ -126,61 +210,30 @@ export default function App() {
                 </div>
             )}
 
-            {/* ─── Bağlantı Gerekli Uyarısı ─── */}
-            {!wallet.connected ? (
-                <div className="max-w-6xl mx-auto px-6 mt-16">
-                    <div className="text-center">
-                        <div className="w-24 h-24 mx-auto rounded-2xl bg-gradient-to-br from-stellar-600/20 to-stellar-400/5 flex items-center justify-center text-5xl mb-6 border border-stellar-500/10">
-                            🔐
-                        </div>
-                        <h2 className="text-2xl font-bold text-white mb-2">
-                            RentLock'a Hoş Geldiniz
-                        </h2>
-                        <p className="text-white/40 max-w-md mx-auto mb-8">
-                            Stellar Soroban üzerinde merkezi olmayan ekipman kiralama protokolü.
-                            Başlamak için cüzdanınızı bağlayın.
-                        </p>
-                        <button onClick={wallet.connect} className="btn-primary text-lg px-8 py-4">
-                            🔗 Cüzdan Bağla
-                        </button>
-                        <p className="text-white/20 text-xs mt-4">
-                            Freighter cüzdan yüklü değilse mock modda çalışır
-                        </p>
-                    </div>
-                </div>
-            ) : (
-                /* ─── Panel İçeriği ─── */
-                <main className="max-w-6xl mx-auto px-6 py-6">
-                    {activeTab === "owner" && (
-                        <OwnerPanel
-                            equipments={contract.equipments}
-                            loading={contract.loading}
-                            onCreateRental={contract.createRental}
-                            onStartRental={contract.startRental}
-                            onSubmitProof={contract.submitProof}
-                        />
-                    )}
-                    {activeTab === "renter" && (
-                        <RenterPanel
-                            equipments={contract.equipments}
-                            loading={contract.loading}
-                            onDeposit={contract.deposit}
-                            onEndRental={contract.endRental}
-                        />
-                    )}
-                    {activeTab === "admin" && (
-                        <AdminPanel
-                            equipments={contract.equipments}
-                            events={contract.events}
-                            totalAccrued={contract.totalAccrued}
-                            loading={contract.loading}
-                            onEndRental={contract.endRental}
-                        />
-                    )}
-                </main>
-            )}
+            {/* Panel İçeriği */}
+            <main className="flex-1 max-w-6xl mx-auto px-6 py-6 w-full">
+                {role === "owner" ? (
+                    <OwnerPanel
+                        equipments={contract.equipments}
+                        events={contract.events}
+                        totalAccrued={contract.totalAccrued}
+                        loading={contract.loading}
+                        onCreateRental={contract.createRental}
+                        onStartRental={contract.startRental}
+                        onSubmitProof={contract.submitProof}
+                        onEndRental={contract.endRental}
+                    />
+                ) : (
+                    <RenterPanel
+                        equipments={contract.equipments}
+                        loading={contract.loading}
+                        onDeposit={contract.deposit}
+                        onEndRental={contract.endRental}
+                    />
+                )}
+            </main>
 
-            {/* ─── Footer ─── */}
+            {/* Footer */}
             <footer className="border-t border-white/5 mt-auto">
                 <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between text-xs text-white/20">
                     <span>RentLock Protocol © 2025</span>

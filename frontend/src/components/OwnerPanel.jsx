@@ -1,17 +1,35 @@
 /**
- * Panel 1 — Kiraya Veren (Owner Panel)
+ * Kiraya Veren Paneli (Owner Dashboard)
  *
- * Ekipman listeleme, aktif kiralama durumları, kiralama başlatma.
+ * - Ekipman ekleme formu
+ * - Aktif kiralamalar listesi (başlatma, proof gönderme)
+ * - Canlı ödeme akışı
+ * - Anlaşmazlık açma
  */
 
-import { useState } from "react";
-import { STATUS_MAP, formatUSDC, formatAddress } from "../services/soroban.js";
+import { useState, useEffect } from "react";
+import { STATUS_MAP, formatUSDC, formatAddress, timeAgo } from "../services/soroban.js";
 
-export default function OwnerPanel({ equipments, loading, onCreateRental, onStartRental, onSubmitProof }) {
+export default function OwnerPanel({
+    equipments, events, totalAccrued, loading,
+    onCreateRental, onStartRental, onSubmitProof, onEndRental,
+}) {
     const [equipmentId, setEquipmentId] = useState("");
     const [dailyPrice, setDailyPrice] = useState("");
     const [depositAmount, setDepositAmount] = useState("");
     const [creating, setCreating] = useState(false);
+    const [displayAccrued, setDisplayAccrued] = useState(0);
+
+    // Yumuşak animasyonlu sayaç
+    useEffect(() => {
+        const step = (totalAccrued - displayAccrued) / 10;
+        if (Math.abs(step) > 0.0001) {
+            const timer = setTimeout(() => setDisplayAccrued((prev) => prev + step), 50);
+            return () => clearTimeout(timer);
+        } else {
+            setDisplayAccrued(totalAccrued);
+        }
+    }, [totalAccrued, displayAccrued]);
 
     const handleCreate = async (e) => {
         e.preventDefault();
@@ -28,134 +46,160 @@ export default function OwnerPanel({ equipments, loading, onCreateRental, onStar
         setCreating(false);
     };
 
+    const activeRentals = equipments.filter((r) => r.status === 2);
+
+    const eventIcons = {
+        RentalCreated: "📋", DepositMade: "💰", RentalStarted: "▶️",
+        ProofSubmitted: "📸", RentalEnded: "🏁", DisputeOpened: "⚠️",
+    };
+    const eventColors = {
+        RentalCreated: "text-blue-400", DepositMade: "text-yellow-400", RentalStarted: "text-emerald-400",
+        ProofSubmitted: "text-purple-400", RentalEnded: "text-gray-400", DisputeOpened: "text-red-400",
+    };
+
     return (
         <div className="space-y-6">
-            {/* ─── Ekipman Ekleme Formu ─── */}
-            <div className="glass p-6">
-                <h2 className="text-lg font-bold text-white mb-1 flex items-center gap-2">
-                    <span className="text-2xl">📦</span> Yeni Ekipman Ekle
-                </h2>
-                <p className="text-white/40 text-sm mb-5">Ekipmanınızı sisteme ekleyerek kiralık hale getirin</p>
-
-                <form onSubmit={handleCreate} className="space-y-4">
-                    <div>
-                        <label className="block text-white/60 text-sm mb-1.5">Ekipman Adı / ID</label>
-                        <input
-                            type="text"
-                            className="input-field"
-                            placeholder="Örn: DRONE-DJI-MAVIC-3"
-                            value={equipmentId}
-                            onChange={(e) => setEquipmentId(e.target.value)}
-                        />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-white/60 text-sm mb-1.5">Günlük Fiyat (USDC)</label>
-                            <input
-                                type="number"
-                                step="0.01"
-                                className="input-field"
-                                placeholder="15.00"
-                                value={dailyPrice}
-                                onChange={(e) => setDailyPrice(e.target.value)}
-                            />
+            {/* ─── Üst: Sayaç + Form ─── */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Canlı Ödeme Akışı */}
+                <div className="glass p-6 relative overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-r from-stellar-600/5 via-transparent to-emerald-500/5" />
+                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[400px] h-[200px] bg-stellar-500/5 rounded-full blur-[100px]" />
+                    <div className="relative">
+                        <h2 className="text-base font-bold text-white mb-1 flex items-center gap-2">
+                            <span className="text-xl">💹</span> Canlı Ödeme Akışı
+                        </h2>
+                        <p className="text-white/30 text-xs mb-4">Aktif kiralamalarda biriken ücret</p>
+                        <div className="text-center py-2">
+                            <div className="text-4xl font-extrabold bg-gradient-to-r from-stellar-400 via-stellar-300 to-emerald-400 bg-clip-text text-transparent mb-1 tabular-nums">
+                                ${displayAccrued.toFixed(6)}
+                            </div>
+                            <div className="text-white/30 text-xs">USDC toplam</div>
+                            <div className="flex items-center justify-center gap-2 mt-2">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                <span className="text-emerald-400 text-xs">{activeRentals.length} aktif kiralama</span>
+                            </div>
                         </div>
-                        <div>
-                            <label className="block text-white/60 text-sm mb-1.5">Depozito (USDC)</label>
-                            <input
-                                type="number"
-                                step="0.01"
-                                className="input-field"
-                                placeholder="100.00"
-                                value={depositAmount}
-                                onChange={(e) => setDepositAmount(e.target.value)}
-                            />
-                        </div>
-                    </div>
-
-                    <button
-                        type="submit"
-                        disabled={creating || !equipmentId || !dailyPrice || !depositAmount}
-                        className="btn-primary w-full flex items-center justify-center gap-2"
-                    >
-                        {creating ? (
-                            <>
-                                <span className="animate-spin">⏳</span> İşleniyor...
-                            </>
-                        ) : (
-                            <>🚀 Ekipmanı Sisteme Ekle</>
+                        {activeRentals.length > 0 && (
+                            <div className="space-y-1 mt-3">
+                                {activeRentals.map((r) => {
+                                    const elapsed = Math.floor(Date.now() / 1000) - r.start_time;
+                                    const accrued = (elapsed / 86400) * (r.daily_price / 10_000_000);
+                                    return (
+                                        <div key={r.rental_id} className="flex items-center justify-between bg-white/5 rounded-lg px-3 py-2 text-xs">
+                                            <span className="text-white/50">#{r.rental_id} {r.equipment_id}</span>
+                                            <span className="text-emerald-400 font-mono font-bold">${accrued.toFixed(4)}</span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
                         )}
-                    </button>
-                </form>
+                    </div>
+                </div>
+
+                {/* Ekipman Ekleme Formu */}
+                <div className="glass p-6">
+                    <h2 className="text-base font-bold text-white mb-1 flex items-center gap-2">
+                        <span className="text-xl">📦</span> Yeni Ekipman Ekle
+                    </h2>
+                    <p className="text-white/30 text-xs mb-4">Ekipmanınızı kiralık olarak listeleyin</p>
+                    <form onSubmit={handleCreate} className="space-y-3">
+                        <div>
+                            <label className="block text-white/50 text-xs mb-1">Ekipman Adı / ID</label>
+                            <input type="text" className="input-field !py-2.5 text-sm" placeholder="Örn: DRONE-DJI-MAVIC-3"
+                                value={equipmentId} onChange={(e) => setEquipmentId(e.target.value)} />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="block text-white/50 text-xs mb-1">Günlük Fiyat (USDC)</label>
+                                <input type="number" step="0.01" className="input-field !py-2.5 text-sm" placeholder="15.00"
+                                    value={dailyPrice} onChange={(e) => setDailyPrice(e.target.value)} />
+                            </div>
+                            <div>
+                                <label className="block text-white/50 text-xs mb-1">Depozito (USDC)</label>
+                                <input type="number" step="0.01" className="input-field !py-2.5 text-sm" placeholder="100.00"
+                                    value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} />
+                            </div>
+                        </div>
+                        <button type="submit" disabled={creating || !equipmentId || !dailyPrice || !depositAmount}
+                            className="btn-primary w-full text-sm !py-2.5 flex items-center justify-center gap-2">
+                            {creating ? <><span className="animate-spin">⏳</span> İşleniyor...</> : <>🚀 Ekipmanı Sisteme Ekle</>}
+                        </button>
+                    </form>
+                </div>
             </div>
 
             {/* ─── Aktif Kiralamalar ─── */}
             <div className="glass p-6">
-                <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                    <span className="text-2xl">📋</span> Kiralamalarım
-                    <span className="ml-auto text-sm font-normal text-white/40">
-                        {equipments.length} kayıt
-                    </span>
+                <h2 className="text-base font-bold text-white mb-4 flex items-center gap-2">
+                    <span className="text-xl">📋</span> Kiralamalarım
+                    <span className="ml-auto text-sm font-normal text-white/30">{equipments.length} kayıt</span>
                 </h2>
-
                 {equipments.length === 0 ? (
-                    <div className="text-center py-8 text-white/30">
-                        <p className="text-4xl mb-2">📭</p>
-                        <p>Henüz kiralama yok</p>
+                    <div className="text-center py-8 text-white/20">
+                        <p className="text-4xl mb-2">📭</p><p>Henüz kiralama yok</p>
                     </div>
                 ) : (
-                    <div className="space-y-3">
+                    <div className="space-y-2">
                         {equipments.map((rental) => {
                             const status = STATUS_MAP[rental.status] || STATUS_MAP[0];
                             return (
-                                <div
-                                    key={rental.rental_id}
-                                    className="glass-hover p-4 flex items-center gap-4"
-                                >
-                                    <div className="text-3xl">{status.icon}</div>
+                                <div key={rental.rental_id} className="glass-hover p-4 flex items-center gap-4">
+                                    <div className="text-2xl">{status.icon}</div>
                                     <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <span className="font-semibold text-white truncate">
-                                                {rental.equipment_id}
-                                            </span>
-                                            <span className={`status-badge ${status.color}`}>
-                                                {status.label}
-                                            </span>
+                                        <div className="flex items-center gap-2 mb-0.5">
+                                            <span className="font-semibold text-white text-sm truncate">{rental.equipment_id}</span>
+                                            <span className={`status-badge text-[10px] ${status.color}`}>{status.label}</span>
                                         </div>
-                                        <div className="flex gap-4 text-sm text-white/40">
-                                            <span>💵 {formatUSDC(rental.daily_price)} USDC/gün</span>
-                                            <span>🔒 {formatUSDC(rental.deposit_amount)} USDC depozito</span>
-                                            {rental.renter && rental.status >= 1 && (
-                                                <span>👤 {formatAddress(rental.renter)}</span>
-                                            )}
+                                        <div className="flex gap-3 text-xs text-white/30">
+                                            <span>💵 {formatUSDC(rental.daily_price)}/gün</span>
+                                            <span>🔒 {formatUSDC(rental.deposit_amount)} depozito</span>
+                                            {rental.renter && rental.status >= 1 && <span>👤 {formatAddress(rental.renter)}</span>}
                                         </div>
                                     </div>
-
-                                    {/* Aksiyon butonları */}
                                     <div className="flex gap-2 shrink-0">
                                         {rental.status === 1 && (
-                                            <button
-                                                onClick={() => onStartRental(rental.rental_id)}
-                                                disabled={loading}
-                                                className="btn-success text-sm !px-4 !py-2"
-                                            >
-                                                ▶ Başlat
-                                            </button>
+                                            <button onClick={() => onStartRental(rental.rental_id)} disabled={loading}
+                                                className="btn-success text-xs !px-3 !py-1.5">▶ Başlat</button>
                                         )}
                                         {rental.status === 2 && rental.proof_hash === "0".repeat(64) && (
-                                            <button
-                                                onClick={() => onSubmitProof(rental.rental_id)}
-                                                disabled={loading}
-                                                className="btn-primary text-sm !px-4 !py-2"
-                                            >
-                                                📸 Proof
-                                            </button>
+                                            <button onClick={() => onSubmitProof(rental.rental_id)} disabled={loading}
+                                                className="btn-primary text-xs !px-3 !py-1.5">📸 Proof</button>
+                                        )}
+                                        {rental.status === 2 && (
+                                            <button onClick={() => onEndRental(rental.rental_id, true)} disabled={loading}
+                                                className="btn-danger text-xs !px-3 !py-1.5">⚠️ Anlaşmazlık</button>
                                         )}
                                     </div>
                                 </div>
                             );
                         })}
+                    </div>
+                )}
+            </div>
+
+            {/* ─── Son Eventler ─── */}
+            <div className="glass p-6">
+                <h2 className="text-base font-bold text-white mb-4 flex items-center gap-2">
+                    <span className="text-xl">⛓️</span> Son Zincir Eventleri
+                </h2>
+                {events.length === 0 ? (
+                    <div className="text-center py-4 text-white/20"><p>Henüz event yok</p></div>
+                ) : (
+                    <div className="space-y-1.5">
+                        {events.map((event, i) => (
+                            <div key={i} className="flex items-center gap-3 bg-white/3 rounded-xl px-4 py-2.5 border border-white/5 hover:bg-white/5 transition-colors">
+                                <span className="text-lg shrink-0">{eventIcons[event.type] || "📌"}</span>
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                        <span className={`text-xs font-semibold ${eventColors[event.type] || "text-white"}`}>{event.type}</span>
+                                        <span className="text-white/15 text-[10px] font-mono">#{event.rental_id}</span>
+                                    </div>
+                                    <p className="text-white/30 text-[11px] truncate">{event.detail}</p>
+                                </div>
+                                <span className="text-white/15 text-[10px] shrink-0">{timeAgo(event.time)}</span>
+                            </div>
+                        ))}
                     </div>
                 )}
             </div>
