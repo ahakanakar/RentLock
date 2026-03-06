@@ -10,15 +10,19 @@
 import { useState, useEffect } from "react";
 import { STATUS_MAP, formatUSDC, formatAddress, timeAgo } from "../services/soroban.js";
 
+const EMPTY_HASH = "0".repeat(64);
+
 export default function OwnerPanel({
     equipments, events, totalAccrued, loading,
-    onCreateRental, onStartRental, onSubmitProof, onEndRental,
+    onCreateRental, onStartRental, onApproveReturn, onOpenDispute,
 }) {
     const [equipmentId, setEquipmentId] = useState("");
     const [dailyPrice, setDailyPrice] = useState("");
     const [depositAmount, setDepositAmount] = useState("");
     const [creating, setCreating] = useState(false);
     const [displayAccrued, setDisplayAccrued] = useState(0);
+    const [actionLoading, setActionLoading] = useState(null); // rental_id | null
+    const [actionError, setActionError] = useState(null);
 
     // Yumuşak animasyonlu sayaç
     useEffect(() => {
@@ -44,6 +48,31 @@ export default function OwnerPanel({
             console.error(err);
         }
         setCreating(false);
+    };
+
+    const handleStart = async (rentalId) => {
+        setActionLoading(rentalId);
+        setActionError(null);
+        try {
+            await onStartRental(rentalId);
+        } catch (err) {
+            setActionError(err.message || "start_rental başarısız oldu");
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
+    // Genel aksiyon handler (approveReturn / openDispute)
+    const handleAction = async (rentalId, fn) => {
+        setActionLoading(rentalId);
+        setActionError(null);
+        try {
+            await fn(rentalId);
+        } catch (err) {
+            setActionError(err.message || "İşlem başarısız oldu");
+        } finally {
+            setActionLoading(null);
+        }
     };
 
     const activeRentals = equipments.filter((r) => r.status === 2);
@@ -135,6 +164,13 @@ export default function OwnerPanel({
                     <span className="text-xl">📋</span> Kiralamalarım
                     <span className="ml-auto text-sm font-normal text-white/30">{equipments.length} kayıt</span>
                 </h2>
+                {actionError && (
+                    <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 mb-4 flex items-center gap-2 text-red-400 text-sm">
+                        <span>❌</span>
+                        <span>{actionError}</span>
+                        <button onClick={() => setActionError(null)} className="ml-auto text-red-400/50 hover:text-red-400">✕</button>
+                    </div>
+                )}
                 {equipments.length === 0 ? (
                     <div className="text-center py-8 text-white/20">
                         <p className="text-4xl mb-2">📭</p><p>Henüz kiralama yok</p>
@@ -157,18 +193,45 @@ export default function OwnerPanel({
                                             {rental.renter && rental.status >= 1 && <span>👤 {formatAddress(rental.renter)}</span>}
                                         </div>
                                     </div>
-                                    <div className="flex gap-2 shrink-0">
+                                    <div className="flex gap-2 shrink-0 flex-wrap justify-end">
+                                        {/* Depozito yatırıldı → başlat */}
                                         {rental.status === 1 && (
-                                            <button onClick={() => onStartRental(rental.rental_id)} disabled={loading}
-                                                className="btn-success text-xs !px-3 !py-1.5">▶ Başlat</button>
+                                            <button
+                                                onClick={() => handleStart(rental.rental_id)}
+                                                disabled={loading || actionLoading === rental.rental_id}
+                                                className="btn-success text-xs !px-3 !py-1.5"
+                                            >
+                                                {actionLoading === rental.rental_id
+                                                    ? <span className="animate-spin">⏳</span>
+                                                    : <>▶ Başlat</>}
+                                            </button>
                                         )}
-                                        {rental.status === 2 && rental.proof_hash === "0".repeat(64) && (
-                                            <button onClick={() => onSubmitProof(rental.rental_id)} disabled={loading}
-                                                className="btn-primary text-xs !px-3 !py-1.5">📸 Proof</button>
+                                        {/* Aktif + proof geldi → Onayla veya Reddet */}
+                                        {rental.status === 2 && rental.proof_hash !== EMPTY_HASH && (
+                                            <>
+                                                <button
+                                                    onClick={() => handleAction(rental.rental_id, onApproveReturn)}
+                                                    disabled={loading || actionLoading === rental.rental_id}
+                                                    className="btn-success text-xs !px-3 !py-1.5"
+                                                >
+                                                    {actionLoading === rental.rental_id
+                                                        ? <span className="animate-spin">⏳</span>
+                                                        : <>✅ Onayla</>}
+                                                </button>
+                                                <button
+                                                    onClick={() => handleAction(rental.rental_id, onOpenDispute)}
+                                                    disabled={loading || actionLoading === rental.rental_id}
+                                                    className="btn-danger text-xs !px-3 !py-1.5"
+                                                >
+                                                    ⚠️ Reddet
+                                                </button>
+                                            </>
                                         )}
-                                        {rental.status === 2 && (
-                                            <button onClick={() => onEndRental(rental.rental_id, true)} disabled={loading}
-                                                className="btn-danger text-xs !px-3 !py-1.5">⚠️ Anlaşmazlık</button>
+                                        {/* Aktif + proof henüz gelmedi → bilgi */}
+                                        {rental.status === 2 && rental.proof_hash === EMPTY_HASH && (
+                                            <span className="text-white/25 text-xs px-2">
+                                                ⏳ İade bekleniyor
+                                            </span>
                                         )}
                                     </div>
                                 </div>

@@ -13,7 +13,7 @@ import { signTransaction } from "@stellar/freighter-api";
 
 // ─── Sabitler ───────────────────────────────────────────
 
-const CONTRACT_ID = "CCAASSOQIDBRZYLQVNPT3W77UU5GPTYSI4PYAD6X5XFGOLRHZWIH2NIY";
+const CONTRACT_ID = "CCPWN54BUKXBNES6EJS5SNWXULKNSZGVTXBJJV2E7AZJW2ADH4PKLSFY";
 const RPC_URL = "https://soroban-testnet.stellar.org";
 const NETWORK_PASSPHRASE = StellarSdk.Networks.TESTNET;
 
@@ -187,7 +187,12 @@ async function callContract(functionName, args, publicKey) {
             preparedTx = await server.prepareTransaction(rawTx);
         } catch (prepErr) {
             console.error(`❌ [Soroban] prepareTransaction hatası:`, prepErr);
-            throw new Error(`Kontrat simülasyon hatası: ${prepErr.message}`);
+            const detail =
+                prepErr?.message ||
+                prepErr?.result?.toString() ||
+                JSON.stringify(prepErr) ||
+                "Bilinmeyen simülasyon hatası";
+            throw new Error(`Kontrat simülasyon hatası: ${detail}`);
         }
 
         // 4. Transaction'ı base64 XDR string'e çevir
@@ -387,25 +392,48 @@ export async function startRental(publicKey, rentalId) {
 
 /**
  * Teslim kanıtı gönderir — submit_proof kontrat çağrısı.
- * Rastgele bir SHA-256 hash üretir (demo amaçlı).
+ * Kiracının girdiği açıklamadan SHA-256 hash üretir ve zincire yazar.
+ *
+ * @param {string} description — Kiracının iade açıklaması (serbest metin)
  */
-export async function submitProof(publicKey, rentalId) {
-    // Demo: rastgele 32 byte hash üret
-    const randomHash = new Uint8Array(32);
-    crypto.getRandomValues(randomHash);
-    const hashHex = Array.from(randomHash)
+export async function submitProof(publicKey, rentalId, description) {
+    // Description + rentalId + timestamp'ten SHA-256 hash üret
+    const input = `${description || "return"}:${rentalId}:${Date.now()}`;
+    const hashBuffer = await crypto.subtle.digest(
+        "SHA-256",
+        new TextEncoder().encode(input)
+    );
+    const proofHash = new Uint8Array(hashBuffer);
+    const hashHex = Array.from(proofHash)
         .map((b) => b.toString(16).padStart(2, "0"))
         .join("");
 
     const args = [
         toScAddress(publicKey),
         toScU64(rentalId),
-        toScBytes32(randomHash),
+        toScBytes32(proofHash),
     ];
 
     const result = await callContract("submit_proof", args, publicKey);
-    addEvent("ProofSubmitted", rentalId, `Hash: ${hashHex.slice(0, 16)}...`);
-    return result;
+    addEvent("ProofSubmitted", rentalId, `İade talebi: ${description?.slice(0, 30) || "—"}`);
+    return { result, hashHex };
+}
+
+/**
+ * Kiraya veren iade talebini onaylar — end_rental ile aynı hash gönderir.
+ * Proof hash == return hash → Completed → depozito kiracıya iade edilir.
+ */
+export async function approveReturn(publicKey, rentalId) {
+    return endRental(publicKey, rentalId, false);
+}
+
+/**
+ * Kiraya veren iade talebini reddeder — end_rental ile farklı hash gönderir.
+ * Proof hash != return hash → Disputed → depozito kiraya verene aktarılır.
+ * NOT: Kontrat resolve_dispute desteklemiyor; depozito anında aktarılır.
+ */
+export async function openDispute(publicKey, rentalId) {
+    return endRental(publicKey, rentalId, true);
 }
 
 /**

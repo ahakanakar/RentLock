@@ -111,11 +111,12 @@ export function useContract(walletAddress) {
         }
     }, [walletAddress, fetchEquipments]);
 
-    const submitProof = useCallback(async (rentalId) => {
+    // description: kiracının girdiği serbest metin; SHA-256 hash'e çevrilip zincire yazılır
+    const submitProof = useCallback(async (rentalId, description) => {
         setLoading(true);
         setError(null);
         try {
-            await soroban.submitProof(walletAddress, rentalId);
+            await soroban.submitProof(walletAddress, rentalId, description);
             await fetchEquipments();
         } catch (err) {
             setError(err.message);
@@ -139,6 +140,36 @@ export function useContract(walletAddress) {
         }
     }, [walletAddress, fetchEquipments]);
 
+    // Kiraya veren: iade talebini onaylar → proof_hash ile aynı hash → Completed
+    const approveReturn = useCallback(async (rentalId) => {
+        setLoading(true);
+        setError(null);
+        try {
+            await soroban.approveReturn(walletAddress, rentalId);
+            await fetchEquipments();
+        } catch (err) {
+            setError(err.message);
+            throw err;
+        } finally {
+            setLoading(false);
+        }
+    }, [walletAddress, fetchEquipments]);
+
+    // Kiraya veren: iade talebini reddeder → farklı hash → Disputed → depozito sahibine
+    const openDispute = useCallback(async (rentalId) => {
+        setLoading(true);
+        setError(null);
+        try {
+            await soroban.openDispute(walletAddress, rentalId);
+            await fetchEquipments();
+        } catch (err) {
+            setError(err.message);
+            throw err;
+        } finally {
+            setLoading(false);
+        }
+    }, [walletAddress, fetchEquipments]);
+
     return {
         equipments,
         events,
@@ -150,6 +181,8 @@ export function useContract(walletAddress) {
         startRental,
         submitProof,
         endRental,
+        approveReturn,
+        openDispute,
         refresh: fetchEquipments,
     };
 }

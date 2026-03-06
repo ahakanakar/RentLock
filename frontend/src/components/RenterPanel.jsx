@@ -1,59 +1,90 @@
 /**
  * Panel 2 — Kiracı (Renter Panel)
  *
- * - Kendi kiralamalarını renter adresiyle filtreler
- * - Status 1 (Depozito): bekleme + iptal seçeneği
- * - Status 2 (Aktif): canlı maliyet sayacı + iade butonu
+ * İade akışı:
+ *  1. Kiracı "İade Et" tıklar
+ *  2. submitProof çağrılır (hash zincire yazılır)
+ *  3. endRental çağrılır (hash karşılaştırılır, depozito iade)
  */
 
 import { useState, useEffect } from "react";
 import { STATUS_MAP, formatUSDC, formatAddress } from "../services/soroban.js";
 
-// Anlık birikmiş maliyeti hesaplar (USDC, 2 ondalık)
 function calcAccrued(rental) {
     if (rental.status !== 2 || !rental.start_time || Number(rental.start_time) === 0) return null;
-    const nowSec = Date.now() / 1000;
-    const elapsed = nowSec - Number(rental.start_time);   // saniye
-    const dailyUSDC = Number(rental.daily_price) / 10_000_000; // USDC/gün
+    const elapsed = Date.now() / 1000 - Number(rental.start_time);
+    const dailyUSDC = Number(rental.daily_price) / 10_000_000;
     return ((elapsed / 86400) * dailyUSDC).toFixed(4);
 }
 
-export default function RenterPanel({ equipments, loading, onDeposit, onEndRental, walletAddress }) {
+export default function RenterPanel({ equipments, loading, onDeposit, onSubmitProof, onEndRental, walletAddress }) {
     const [actionLoading, setActionLoading] = useState(null);
-    const [tick, setTick] = useState(0); // her saniye tetikler (canlı sayaç)
+    const [actionError, setActionError] = useState("");
+    const [tick, setTick] = useState(0);
 
-    // Canlı maliyet sayacı — her saniye tick
     useEffect(() => {
         const id = setInterval(() => setTick((t) => t + 1), 1000);
         return () => clearInterval(id);
     }, []);
 
-    // Mevcut kiracıya ait olmayan kiralamalar hariç tut
     const availableRentals = equipments.filter((r) => r.status === 0);
 
-    // Kiracının kendi kiralamalarını filtrele (renter adresi eşleşmeli)
-    // renter alanı kontratdan geliyor; eşleşmiyorsa tüm status 1-2'i göster (fallback)
     const myRentals = equipments.filter((r) => {
         if (r.status < 1 || r.status > 2) return false;
-        if (!r.renter || !walletAddress) return true; // adres yoksa hepsini göster
+        if (!r.renter || !walletAddress) return true;
         return r.renter === walletAddress;
     });
 
     const handleDeposit = async (rentalId) => {
         setActionLoading(rentalId);
-        try { await onDeposit(rentalId); } catch (err) { console.error(err); }
+        setActionError("");
+        try {
+            await onDeposit(rentalId);
+        } catch (err) {
+            setActionError(err.message || "Depozito kilitlenemedi");
+        }
         setActionLoading(null);
     };
 
+    // İade: önce proof hash zincire yaz, sonra end_rental ile kapat
     const handleReturn = async (rentalId) => {
         setActionLoading(rentalId);
-        try { await onEndRental(rentalId, false); } catch (err) { console.error(err); }
+        setActionError("");
+        try {
+            if (onSubmitProof) {
+                await onSubmitProof(rentalId);
+            }
+            if (onEndRental) {
+                await onEndRental(rentalId, false);
+            }
+        } catch (err) {
+            setActionError(err.message || "İade işlemi başarısız");
+        }
         setActionLoading(null);
-        setSelectedRental(null);
+    };
+
+    const handleCancelDeposit = async (rentalId) => {
+        setActionLoading(rentalId);
+        setActionError("");
+        try {
+            if (onEndRental) await onEndRental(rentalId, false);
+        } catch (err) {
+            setActionError(err.message || "İptal başarısız");
+        }
+        setActionLoading(null);
     };
 
     return (
         <div className="space-y-6">
+
+            {/* Hata banner */}
+            {actionError && (
+                <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 flex items-center gap-2 text-red-400 text-sm">
+                    <span>❌</span>
+                    <span className="flex-1 text-xs">{actionError}</span>
+                    <button onClick={() => setActionError("")} className="text-red-400/50 hover:text-red-400">✕</button>
+                </div>
+            )}
 
             {/* ─── Kiralanabilir Ekipmanlar ─── */}
             <div className="glass p-6">
@@ -116,7 +147,7 @@ export default function RenterPanel({ equipments, loading, onDeposit, onEndRenta
                     <div className="space-y-3">
                         {myRentals.map((rental) => {
                             const status = STATUS_MAP[rental.status] || STATUS_MAP[0];
-                            const accrued = calcAccrued(rental); // tick bağımlı — her sn güncellenir
+                            const accrued = calcAccrued(rental);
                             const elapsedDays = rental.status === 2 && rental.start_time > 0
                                 ? ((Date.now() / 1000 - Number(rental.start_time)) / 86400).toFixed(2)
                                 : null;
@@ -127,44 +158,36 @@ export default function RenterPanel({ equipments, loading, onDeposit, onEndRenta
                                         <div className="text-3xl mt-0.5">{status.icon}</div>
 
                                         <div className="flex-1 min-w-0">
-                                            {/* Başlık satırı */}
                                             <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                                <span className="font-bold text-white text-base">
-                                                    {rental.equipment_id}
-                                                </span>
-                                                <span className={`status-badge ${status.color}`}>
-                                                    {status.label}
-                                                </span>
+                                                <span className="font-bold text-white text-base">{rental.equipment_id}</span>
+                                                <span className={`status-badge ${status.color}`}>{status.label}</span>
                                             </div>
 
-                                            {/* Bilgi satırı */}
                                             <div className="flex flex-wrap gap-4 text-sm text-white/40 mb-3">
                                                 <span>🔒 {formatUSDC(rental.deposit_amount)} USDC depozito</span>
                                                 <span>💵 {formatUSDC(rental.daily_price)} USDC/gün</span>
                                                 {elapsedDays && <span>📅 {elapsedDays} gün geçti</span>}
                                             </div>
 
-                                            {/* Canlı maliyet (sadece aktifken) */}
+                                            {/* Canlı maliyet sayacı */}
                                             {rental.status === 2 && accrued !== null && (
                                                 <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-2">
                                                     <span className="text-emerald-400/60 text-xs">Şu ana kadar:</span>
-                                                    <span className="text-emerald-400 font-bold font-mono">
-                                                        ${accrued} USDC
-                                                    </span>
+                                                    <span className="text-emerald-400 font-bold font-mono">${accrued} USDC</span>
                                                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                                                 </div>
                                             )}
 
-                                            {/* Status 1: sahibi başlatmasını bekliyor */}
                                             {rental.status === 1 && (
-                                                <div className="text-yellow-400/60 text-xs mt-1">
-                                                    ⏳ Ekipman sahibinin kiralamayı başlatması bekleniyor...
-                                                </div>
+                                                <p className="text-yellow-400/60 text-xs mt-1">
+                                                    ⏳ Kiralama sahibin onayı bekleniyor ("Başlat" butonu)
+                                                </p>
                                             )}
                                         </div>
 
-                                        {/* İade Butonu — status 1 veya 2 */}
+                                        {/* Butonlar */}
                                         <div className="shrink-0 flex flex-col gap-2">
+                                            {/* Aktif (status 2) → İade Et */}
                                             {rental.status === 2 && (
                                                 <button
                                                     onClick={() => handleReturn(rental.rental_id)}
@@ -172,19 +195,20 @@ export default function RenterPanel({ equipments, loading, onDeposit, onEndRenta
                                                     className="btn-success text-sm !px-4 !py-2"
                                                 >
                                                     {actionLoading === rental.rental_id
-                                                        ? <span className="animate-spin">⏳</span>
-                                                        : <>📷 İade Et</>}
+                                                        ? <><span className="animate-spin">⏳</span></>
+                                                        : <>📦 İade Et</>}
                                                 </button>
                                             )}
+                                            {/* Depozito yatırıldı (status 1) → İptal */}
                                             {rental.status === 1 && (
                                                 <button
-                                                    onClick={() => handleReturn(rental.rental_id)}
+                                                    onClick={() => handleCancelDeposit(rental.rental_id)}
                                                     disabled={loading || actionLoading === rental.rental_id}
                                                     className="px-4 py-2 rounded-xl text-sm border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-all"
                                                 >
                                                     {actionLoading === rental.rental_id
                                                         ? <span className="animate-spin">⏳</span>
-                                                        : <>↩️ Depozitoyu Geri Al</>}
+                                                        : <>↩️ İptal</>}
                                                 </button>
                                             )}
                                         </div>
@@ -194,7 +218,6 @@ export default function RenterPanel({ equipments, loading, onDeposit, onEndRenta
                         })}
                     </div>
                 )}
-
             </div>
         </div>
     );
