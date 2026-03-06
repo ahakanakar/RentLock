@@ -64,6 +64,18 @@ export default function App() {
                                         {walletError}
                                     </div>
                                 )}
+                                {wallet.notInstalled && !wallet.checking && (
+                                    <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl px-4 py-3 mb-4 text-left">
+                                        <p className="text-yellow-400 text-sm font-semibold mb-1">⚠️ Freighter cüzdan eklentisi bulunamadı</p>
+                                        <p className="text-yellow-400/60 text-xs mb-3">
+                                            RentLock'u kullanmak için Freighter tarayıcı eklentisini yüklemeniz gerekiyor.
+                                        </p>
+                                        <a href="https://freighter.app" target="_blank" rel="noopener noreferrer"
+                                            className="inline-block px-4 py-2 bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/30 rounded-lg text-yellow-400 text-sm font-semibold transition-colors">
+                                            📥 Freighter'ı İndir → freighter.app
+                                        </a>
+                                    </div>
+                                )}
                                 <button
                                     onClick={async () => {
                                         setWalletError("");
@@ -76,16 +88,20 @@ export default function App() {
                                     disabled={wallet.loading || wallet.checking}
                                     className="btn-primary text-lg px-10 py-4 w-full"
                                 >
-                                    {wallet.loading || wallet.checking ? (
+                                    {wallet.checking ? (
+                                        <>⏳ Freighter aranıyor...</>
+                                    ) : wallet.loading ? (
                                         <span className="animate-spin">⏳</span>
                                     ) : (
                                         <>🔗 Freighter ile Bağlan</>
                                     )}
                                 </button>
-                                <a href="https://freighter.app" target="_blank" rel="noopener noreferrer"
-                                    className="block text-stellar-400/50 hover:text-stellar-400 text-xs mt-4 transition-colors">
-                                    Freighter cüzdanı yüklü değil mi? → freighter.app
-                                </a>
+                                {!wallet.notInstalled && (
+                                    <a href="https://freighter.app" target="_blank" rel="noopener noreferrer"
+                                        className="block text-stellar-400/50 hover:text-stellar-400 text-xs mt-4 transition-colors">
+                                        Freighter cüzdanı yüklü değil mi? → freighter.app
+                                    </a>
+                                )}
                             </div>
                         ) : (
                             /* Adım 2: Rol Seçimi */

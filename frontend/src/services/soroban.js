@@ -8,6 +8,7 @@
 
 import * as StellarSdk from "@stellar/stellar-sdk";
 import * as rpc from "@stellar/stellar-sdk/rpc";
+import { signTransaction } from "@stellar/freighter-api";
 
 // ─── Sabitler ───────────────────────────────────────────
 
@@ -187,9 +188,11 @@ async function callContract(functionName, args, publicKey) {
 
         // 5. Freighter ile imzala
         console.log(`🔏 [Soroban] Freighter imza isteniyor...`);
-        const { signedTxXdr } = await window.freighterApi.signTransaction(preparedXdr, {
+        const signResult = await signTransaction(preparedXdr, {
             networkPassphrase: NETWORK_PASSPHRASE,
         });
+        // v2 API: result nesne veya string olabilir
+        const signedTxXdr = typeof signResult === "object" ? signResult.signedTxXdr : signResult;
 
         // 6. İmzalı transaction'ı ağa gönder
         console.log(`🚀 [Soroban] Transaction gönderiliyor...`);

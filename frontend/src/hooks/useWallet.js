@@ -1,11 +1,41 @@
 /**
  * RentLock — Freighter Cüzdan Hook'u
  *
- * Gerçek Freighter cüzdan entegrasyonu.
- * Freighter yüklü değilse bağlantı yapılamaz.
+ * @stellar/freighter-api paketini kullanır (window.freighter DEĞİL).
+ * Retry mekanizması: 3 saniye timeout, 500ms aralıkla kontrol.
+ * Yüklü değilse indirme linki gösterir.
  */
 
 import { useState, useCallback, useEffect } from "react";
+import {
+    requestAccess,
+    signTransaction,
+    isConnected as checkIsConnected,
+} from "@stellar/freighter-api";
+
+// Freighter'ın yüklenmesini bekleyen retry fonksiyonu
+async function waitForFreighter(timeoutMs = 3000, intervalMs = 500) {
+    const start = Date.now();
+
+    while (Date.now() - start < timeoutMs) {
+        try {
+            const result = await checkIsConnected();
+            // freighter-api v2 dönüş formatı
+            const connected =
+                typeof result === "object" ? result.isConnected : result;
+            if (connected) {
+                console.log("🔍 [Wallet] Freighter bulundu ✅");
+                return true;
+            }
+        } catch {
+            // Henüz yüklenmedi, tekrar dene
+        }
+        await new Promise((r) => setTimeout(r, intervalMs));
+    }
+
+    console.log("🔍 [Wallet] Freighter bulunamadı (3sn timeout) ❌");
+    return false;
+}
 
 export function useWallet() {
     const [address, setAddress] = useState("");
@@ -13,47 +43,56 @@ export function useWallet() {
     const [isFreighter, setIsFreighter] = useState(false);
     const [loading, setLoading] = useState(false);
     const [checking, setChecking] = useState(true);
+    const [notInstalled, setNotInstalled] = useState(false);
 
-    // Freighter varlığını kontrol et
+    // Sayfa yüklendiğinde Freighter'ı ara (retry ile)
     useEffect(() => {
-        const check = async () => {
-            // Freighter inject olana kadar biraz bekle
-            await new Promise((r) => setTimeout(r, 800));
-            try {
-                if (window.freighterApi) {
-                    const { isConnected } = await window.freighterApi.isConnected();
-                    setIsFreighter(isConnected);
-                    console.log(`🔍 [Wallet] Freighter ${isConnected ? "bulundu ✅" : "bulunamadı ❌"}`);
-                } else {
-                    setIsFreighter(false);
-                    console.log("🔍 [Wallet] Freighter yüklü değil");
-                }
-            } catch {
-                setIsFreighter(false);
+        let cancelled = false;
+        const detect = async () => {
+            const found = await waitForFreighter();
+            if (!cancelled) {
+                setIsFreighter(found);
+                setNotInstalled(!found);
+                setChecking(false);
             }
-            setChecking(false);
         };
-        check();
+        detect();
+        return () => {
+            cancelled = true;
+        };
     }, []);
 
     const connect = useCallback(async () => {
         setLoading(true);
         try {
-            if (!window.freighterApi) {
-                throw new Error("Freighter cüzdan yüklü değil. Lütfen Freighter eklentisini yükleyin: https://freighter.app");
+            // Önce Freighter varlığını tekrar kontrol et
+            const connResult = await checkIsConnected();
+            const isAvailable =
+                typeof connResult === "object"
+                    ? connResult.isConnected
+                    : connResult;
+
+            if (!isAvailable) {
+                setNotInstalled(true);
+                throw new Error(
+                    "Freighter cüzdan eklentisi yüklü değil. Lütfen freighter.app adresinden yükleyin."
+                );
             }
 
             // Freighter'dan erişim iste
-            const result = await window.freighterApi.requestAccess();
+            const result = await requestAccess();
 
-            if (result.error) {
-                throw new Error(result.error);
+            // v2 API dönüş formatını kontrol et
+            const addr = typeof result === "object" ? result.address : result;
+
+            if (!addr) {
+                throw new Error("Freighter'dan adres alınamadı. Lütfen eklentiyi kontrol edin.");
             }
 
-            const addr = result.address;
             setAddress(addr);
             setConnected(true);
             setIsFreighter(true);
+            setNotInstalled(false);
             console.log("🔗 [Wallet] Freighter bağlandı:", addr);
         } catch (error) {
             console.error("❌ [Wallet] Bağlantı hatası:", error.message);
@@ -75,7 +114,10 @@ export function useWallet() {
         isFreighter,
         loading,
         checking,
+        notInstalled,
         connect,
         disconnect,
+        // Dışarıdan transaction imzalamak için export ediyoruz
+        signTransaction,
     };
 }
