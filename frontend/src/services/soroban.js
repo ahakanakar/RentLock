@@ -554,3 +554,41 @@ export async function setupUsdcTrustline(publicKey) {
     addEvent("TrustlineCreated", "-", "USDC trustline açıldı");
     return result;
 }
+
+/**
+ * USDC SAC kontratından kullanıcının gerçek USDC bakiyesini okur.
+ * Horizon'daki bakiyeden farklı olabilir — kontrat bu değeri görür.
+ * @returns {Promise<number>} USDC miktarı (7 decimal, ör. 1.5 → 15000000)
+ */
+export async function queryUsdcBalance(publicKey) {
+    try {
+        const account = await server.getAccount(publicKey);
+        const usdcContract = new StellarSdk.Contract(
+            "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIIHMXQDAMA"
+        );
+        const tx = new StellarSdk.TransactionBuilder(account, {
+            fee: StellarSdk.BASE_FEE,
+            networkPassphrase: NETWORK_PASSPHRASE,
+        })
+            .addOperation(
+                usdcContract.call(
+                    "balance",
+                    new StellarSdk.Address(publicKey).toScVal()
+                )
+            )
+            .setTimeout(30)
+            .build();
+
+        const simulated = await server.simulateTransaction(tx);
+        if (rpc.Api.isSimulationError(simulated)) return 0;
+        const raw = simulated.result?.retval ? parseScVal(simulated.result.retval) : 0;
+        return Number(raw);
+    } catch (err) {
+        console.error("❌ [USDC] Bakiye sorgu hatası:", err.message);
+        return 0;
+    }
+}
+
+/** Kontratın kullandığı USDC SAC adresi */
+export const USDC_SAC = "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIIHMXQDAMA";
+
