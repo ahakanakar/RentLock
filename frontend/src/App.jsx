@@ -11,10 +11,9 @@ import { useWallet } from "./hooks/useWallet.js";
 import { useContract } from "./hooks/useContract.js";
 import OwnerPanel from "./components/OwnerPanel.jsx";
 import RenterPanel from "./components/RenterPanel.jsx";
-import AdminPanel from "./components/AdminPanel.jsx";
 
 export default function App() {
-    const [role, setRole] = useState(null); // null | "owner" | "renter" | "admin"
+    const [role, setRole] = useState(null); // null | "owner" | "renter"
     const [walletError, setWalletError] = useState("");
     const wallet = useWallet();
     const contract = useContract(wallet.address);
@@ -154,21 +153,6 @@ export default function App() {
                                     </button>
                                 </div>
 
-                                {/* Admin */}
-                                <button
-                                    onClick={() => setRole("admin")}
-                                    className="glass-hover w-full mt-4 p-4 text-center group cursor-pointer"
-                                >
-                                    <div className="flex items-center justify-center gap-3">
-                                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-600/20 to-purple-400/5 flex items-center justify-center text-xl border border-purple-500/10 group-hover:border-purple-500/30 transition-all">
-                                            🛡️
-                                        </div>
-                                        <div className="text-left">
-                                            <h3 className="text-sm font-bold text-white">Admin</h3>
-                                            <p className="text-white/30 text-xs">Anlaşmazlıkları izle, zincir eventlerini takip et</p>
-                                        </div>
-                                    </div>
-                                </button>
 
                                 <button
                                     onClick={wallet.disconnect}
@@ -204,7 +188,7 @@ export default function App() {
                                 RentLock
                             </h1>
                             <p className="text-[10px] text-white/30 -mt-0.5 tracking-wider uppercase">
-                                {role === "owner" ? "Kiraya Veren Paneli" : role === "admin" ? "Admin Paneli" : "Kiracı Paneli"}
+                                {role === "owner" ? "Kiraya Veren Paneli" : "Kiracı Paneli"}
                             </p>
                         </div>
                     </div>
@@ -212,10 +196,9 @@ export default function App() {
                     <div className="flex items-center gap-3">
                         {/* Rol badge */}
                         <span className={`px-3 py-1 rounded-lg text-xs font-semibold border ${role === "owner" ? "bg-stellar-500/10 text-stellar-400 border-stellar-500/20"
-                                : role === "admin" ? "bg-purple-500/10 text-purple-400 border-purple-500/20"
-                                    : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                            : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
                             }`}>
-                            {role === "owner" ? "🏠 Kiraya Veren" : role === "admin" ? "🛡️ Admin" : "🔑 Kiracı"}
+                            {role === "owner" ? "🏠 Kiraya Veren" : "🔑 Kiracı"}
                         </span>
 
                         <span className="px-2 py-0.5 rounded-md bg-stellar-500/10 text-stellar-400 text-[10px] font-semibold border border-stellar-500/20">

@@ -51,14 +51,19 @@ export default function OwnerPanel({
     };
 
     const handleStart = async (rentalId) => {
+        console.log("▶ [DEBUG] BAŞLAT butonuna tıklandı. Rental ID:", rentalId);
         setActionLoading(rentalId);
         setActionError(null);
         try {
+            console.log("▶ [DEBUG] onStartRental çağrılıyor...");
             await onStartRental(rentalId);
+            console.log("▶ [DEBUG] onStartRental BAŞARILI.");
         } catch (err) {
+            console.error("▶ [DEBUG] onStartRental HATASI:", err);
             setActionError(err.message || "start_rental başarısız oldu");
         } finally {
             setActionLoading(null);
+            console.log("▶ [DEBUG] BAŞLAT işlemi tamamlandı (finally).");
         }
     };
 

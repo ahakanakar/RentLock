@@ -618,5 +618,5 @@ export async function queryUsdcBalance(publicKey) {
 }
 
 /** Kontratın kullandığı USDC SAC adresi */
-export const USDC_SAC = "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIIHMXQDAMA";
+export const USDC_SAC = "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA";
 
