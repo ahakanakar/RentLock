@@ -162,66 +162,73 @@ async function callContract(functionName, args, publicKey) {
         // 1. Hesap bilgilerini al
         const account = await server.getAccount(publicKey);
 
-        // 2. Transaction oluştur
+        // 2. Ham transaction oluştur (footprint olmadan)
         const contract = new StellarSdk.Contract(CONTRACT_ID);
-        const tx = new StellarSdk.TransactionBuilder(account, {
-            fee: StellarSdk.BASE_FEE,
+        const rawTx = new StellarSdk.TransactionBuilder(account, {
+            fee: "1000000", // Soroban için yüksek fee gerekli
             networkPassphrase: NETWORK_PASSPHRASE,
         })
             .addOperation(contract.call(functionName, ...args))
             .setTimeout(60)
             .build();
 
-        // 3. Simüle et
-        console.log(`⏳ [Soroban] Simülasyon yapılıyor...`);
-        const simulated = await server.simulateTransaction(tx);
-
-        if (rpc.Api.isSimulationError(simulated)) {
-            const errMsg = simulated.error || "Bilinmeyen simülasyon hatası";
-            console.error(`❌ [Soroban] Simülasyon hatası:`, errMsg);
-            throw new Error(`Kontrat hatası: ${errMsg}`);
+        // 3. server.prepareTransaction: simüle et + footprint ekle + hazır Transaction döndür
+        // SDK v13'te bu tek çağrı tüm assembly işini yapar
+        console.log(`⏳ [Soroban] Transaction hazırlanıyor (prepareTransaction)...`);
+        let preparedTx;
+        try {
+            preparedTx = await server.prepareTransaction(rawTx);
+        } catch (prepErr) {
+            console.error(`❌ [Soroban] prepareTransaction hatası:`, prepErr);
+            throw new Error(`Kontrat simülasyon hatası: ${prepErr.message}`);
         }
 
-        // 4. Simülasyon sonucuyla transaction'ı hazırla
-        // SDK v12: assembleTransaction → doğrudan Transaction döndürür (TransactionBuilder DEĞİL)
-        const preparedTx = rpc.assembleTransaction(tx, simulated);
-        const preparedXdr = preparedTx.toXDR("base64");
-        console.log(`📦 [Soroban] Hazırlanan XDR uzunluğu: ${preparedXdr.length}`);
+        // 4. Transaction'ı base64 XDR string'e çevir
+        const xdrString = preparedTx.toXDR("base64");
+        console.log(`📦 [Soroban] XDR hazır (${xdrString.length} karakter)`);
 
-        // 5. Freighter ile imzala (base64 XDR string bekler)
+        // 5. Freighter API v2 ile imzala
+        // v2'de network parametresi "TESTNET" string olarak geçiyor
         console.log(`🔏 [Soroban] Freighter imza isteniyor...`);
-        const signResult = await signTransaction(preparedXdr, {
-            networkPassphrase: NETWORK_PASSPHRASE,
-        });
+        let signedXdr;
+        try {
+            const signResult = await signTransaction(xdrString, {
+                networkPassphrase: NETWORK_PASSPHRASE,
+                network: "TESTNET",
+            });
+            // Freighter v2 dönüşü: { signedTxXdr: string } veya doğrudan string
+            signedXdr =
+                signResult && typeof signResult === "object" && signResult.signedTxXdr
+                    ? signResult.signedTxXdr
+                    : typeof signResult === "string"
+                        ? signResult
+                        : null;
+            if (!signedXdr) throw new Error("Freighter geçersiz bir yanıt döndürdü");
+        } catch (signErr) {
+            if (signErr.message?.includes("geçersiz")) throw signErr;
+            throw new Error(`İmzalama iptal edildi veya başarısız: ${signErr.message}`);
+        }
 
-        // v1/v2 API: { signedTxXdr } nesnesi veya doğrudan string olabilir
-        const signedTxXdr =
-            signResult && typeof signResult === "object" && signResult.signedTxXdr
-                ? signResult.signedTxXdr
-                : typeof signResult === "string"
-                    ? signResult
-                    : (() => { throw new Error("Freighter'dan geçerli bir imza alınamadı"); })();
+        console.log(`✍️ [Soroban] İmzalı XDR alındı`);
 
-        console.log(`✍️ [Soroban] İmzalı XDR alındı (${signedTxXdr.length} karakter)`);
-
-        // 6. İmzalı XDR'ı Transaction nesnesine çevir ve ağa gönder
+        // 6. İmzalı XDR'ı parse et ve ağa gönder
         const signedTx = StellarSdk.TransactionBuilder.fromXDR(
-            signedTxXdr,
+            signedXdr,
             NETWORK_PASSPHRASE
         );
         console.log(`🚀 [Soroban] Transaction gönderiliyor...`);
         const sendResponse = await server.sendTransaction(signedTx);
 
         if (sendResponse.status === "ERROR") {
-            console.error(`❌ [Soroban] Gönderim hatası:`, sendResponse);
-            throw new Error("Transaction gönderim hatası");
+            const detail = JSON.stringify(sendResponse.errorResult ?? sendResponse);
+            console.error(`❌ [Soroban] Gönderim hatası:`, detail);
+            throw new Error(`Transaction reddedildi: ${detail}`);
         }
 
-        // 7. Sonucu bekle
+        // 7. Onay bekle
         console.log(`⏳ [Soroban] Onay bekleniyor... Hash: ${sendResponse.hash}`);
         const result = await waitForTransaction(sendResponse.hash);
-
-        console.log(`✅ [Soroban] ${functionName} başarılı! Hash: ${sendResponse.hash}`);
+        console.log(`✅ [Soroban] ${functionName} başarılı!`);
         return result;
     } catch (error) {
         console.error(`❌ [Soroban] ${functionName} başarısız:`, error.message);
