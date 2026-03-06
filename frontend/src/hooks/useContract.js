@@ -1,43 +1,51 @@
 /**
  * RentLock — Kontrat Etkileşim Hook'u
  *
- * Tüm kontrat operasyonlarını React state ile yönetir.
- * Mock data veya gerçek kontrat ile çalışır.
+ * Stellar Testnet kontratına gerçek bağlantı.
+ * Her 5 saniyede bir kontratdan veri çeker (polling).
+ * Mock data KULLANMAZ.
  */
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import * as soroban from "../services/soroban.js";
 
-export function useContract() {
+export function useContract(walletAddress) {
     const [equipments, setEquipments] = useState([]);
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [totalAccrued, setTotalAccrued] = useState(0);
     const intervalRef = useRef(null);
+    const pollingRef = useRef(null);
 
-    // Ekipman listesini yükle
+    // Ekipman listesini kontratdan çek
     const fetchEquipments = useCallback(async () => {
+        if (!walletAddress) return;
         try {
-            const data = await soroban.getEquipments();
+            const data = await soroban.getEquipments(walletAddress);
             setEquipments(data);
             setEvents(soroban.getEvents());
         } catch (err) {
-            setError(err.message);
+            console.error("❌ [Contract] Fetch hatası:", err.message);
         }
-    }, []);
+    }, [walletAddress]);
 
-    // İlk yüklemede veriyi çek + her 5 saniyede bir kontratdan polling yap
-    // Bu sayede kiraya veren ekipman eklediğinde kiracı paneli 5sn içinde güncellenir
+    // Kontratdan 5 saniyede bir polling
     useEffect(() => {
-        fetchEquipments();
-        const pollInterval = setInterval(() => {
-            fetchEquipments();
-        }, 5000); // 5 saniyede bir kontratdan oku (polling)
-        return () => clearInterval(pollInterval);
-    }, [fetchEquipments]);
+        if (!walletAddress) return;
 
-    // Canlı sayaç — aktif kiralama ücretlerini saniyede bir güncelle
+        fetchEquipments(); // İlk yükleme
+
+        pollingRef.current = setInterval(() => {
+            fetchEquipments();
+        }, 5000);
+
+        return () => {
+            if (pollingRef.current) clearInterval(pollingRef.current);
+        };
+    }, [walletAddress, fetchEquipments]);
+
+    // Canlı USDC sayacı — her saniye güncelle
     useEffect(() => {
         intervalRef.current = setInterval(() => {
             setEquipments((prev) => {
@@ -45,8 +53,8 @@ export function useContract() {
                 let total = 0;
                 prev.forEach((r) => {
                     if (r.status === 2 && r.start_time > 0) {
-                        const elapsed = now - r.start_time;
-                        const dailyRate = r.daily_price / 10_000_000;
+                        const elapsed = now - Number(r.start_time);
+                        const dailyRate = Number(r.daily_price) / 10_000_000;
                         const accrued = (elapsed / 86400) * dailyRate;
                         total += accrued;
                     }
@@ -59,12 +67,13 @@ export function useContract() {
         return () => clearInterval(intervalRef.current);
     }, []);
 
-    // Yeni kiralama oluştur
+    // ─── Kontrat İşlemleri ──────────────────────────────
+
     const createRental = useCallback(async (equipmentId, dailyPrice, depositAmount) => {
         setLoading(true);
         setError(null);
         try {
-            await soroban.createRental(equipmentId, dailyPrice, depositAmount);
+            await soroban.createRental(walletAddress, equipmentId, dailyPrice, depositAmount);
             await fetchEquipments();
         } catch (err) {
             setError(err.message);
@@ -72,14 +81,13 @@ export function useContract() {
         } finally {
             setLoading(false);
         }
-    }, [fetchEquipments]);
+    }, [walletAddress, fetchEquipments]);
 
-    // Depozito yatır
     const deposit = useCallback(async (rentalId) => {
         setLoading(true);
         setError(null);
         try {
-            await soroban.depositRental(rentalId);
+            await soroban.depositRental(walletAddress, rentalId);
             await fetchEquipments();
         } catch (err) {
             setError(err.message);
@@ -87,14 +95,13 @@ export function useContract() {
         } finally {
             setLoading(false);
         }
-    }, [fetchEquipments]);
+    }, [walletAddress, fetchEquipments]);
 
-    // Kiralama başlat
     const startRental = useCallback(async (rentalId) => {
         setLoading(true);
         setError(null);
         try {
-            await soroban.startRental(rentalId);
+            await soroban.startRental(walletAddress, rentalId);
             await fetchEquipments();
         } catch (err) {
             setError(err.message);
@@ -102,14 +109,13 @@ export function useContract() {
         } finally {
             setLoading(false);
         }
-    }, [fetchEquipments]);
+    }, [walletAddress, fetchEquipments]);
 
-    // Proof gönder
     const submitProof = useCallback(async (rentalId) => {
         setLoading(true);
         setError(null);
         try {
-            await soroban.submitProof(rentalId);
+            await soroban.submitProof(walletAddress, rentalId);
             await fetchEquipments();
         } catch (err) {
             setError(err.message);
@@ -117,14 +123,13 @@ export function useContract() {
         } finally {
             setLoading(false);
         }
-    }, [fetchEquipments]);
+    }, [walletAddress, fetchEquipments]);
 
-    // Kiralama sonlandır
     const endRental = useCallback(async (rentalId, isDisputed = false) => {
         setLoading(true);
         setError(null);
         try {
-            await soroban.endRental(rentalId, isDisputed);
+            await soroban.endRental(walletAddress, rentalId, isDisputed);
             await fetchEquipments();
         } catch (err) {
             setError(err.message);
@@ -132,7 +137,7 @@ export function useContract() {
         } finally {
             setLoading(false);
         }
-    }, [fetchEquipments]);
+    }, [walletAddress, fetchEquipments]);
 
     return {
         equipments,

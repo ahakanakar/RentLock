@@ -1,58 +1,67 @@
 /**
  * RentLock — Freighter Cüzdan Hook'u
  *
- * Freighter cüzdan bağlantısını yönetir.
- * Cüzdan yüklü değilse mock modda çalışır.
+ * Gerçek Freighter cüzdan entegrasyonu.
+ * Freighter yüklü değilse bağlantı yapılamaz.
  */
 
 import { useState, useCallback, useEffect } from "react";
-
-const MOCK_ADDRESS = "GBXYZ...MOCK_WALLET";
 
 export function useWallet() {
     const [address, setAddress] = useState("");
     const [connected, setConnected] = useState(false);
     const [isFreighter, setIsFreighter] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [checking, setChecking] = useState(true);
 
     // Freighter varlığını kontrol et
     useEffect(() => {
         const check = async () => {
+            // Freighter inject olana kadar biraz bekle
+            await new Promise((r) => setTimeout(r, 800));
             try {
                 if (window.freighterApi) {
-                    setIsFreighter(true);
+                    const { isConnected } = await window.freighterApi.isConnected();
+                    setIsFreighter(isConnected);
+                    console.log(`🔍 [Wallet] Freighter ${isConnected ? "bulundu ✅" : "bulunamadı ❌"}`);
+                } else {
+                    setIsFreighter(false);
+                    console.log("🔍 [Wallet] Freighter yüklü değil");
                 }
             } catch {
                 setIsFreighter(false);
             }
+            setChecking(false);
         };
-        // Freighter yüklenmesini biraz bekle
-        setTimeout(check, 500);
+        check();
     }, []);
 
     const connect = useCallback(async () => {
         setLoading(true);
         try {
-            if (isFreighter && window.freighterApi) {
-                const { address: addr } = await window.freighterApi.requestAccess();
-                setAddress(addr);
-                setConnected(true);
-                console.log("🔗 [Wallet] Freighter bağlandı:", addr);
-            } else {
-                // Mock mode — Freighter yüklü değil
-                setAddress(MOCK_ADDRESS);
-                setConnected(true);
-                console.log("🔗 [Wallet] Mock cüzdan bağlandı");
+            if (!window.freighterApi) {
+                throw new Error("Freighter cüzdan yüklü değil. Lütfen Freighter eklentisini yükleyin: https://freighter.app");
             }
-        } catch (error) {
-            console.error("❌ [Wallet] Bağlantı hatası:", error);
-            // Fallback to mock
-            setAddress(MOCK_ADDRESS);
+
+            // Freighter'dan erişim iste
+            const result = await window.freighterApi.requestAccess();
+
+            if (result.error) {
+                throw new Error(result.error);
+            }
+
+            const addr = result.address;
+            setAddress(addr);
             setConnected(true);
+            setIsFreighter(true);
+            console.log("🔗 [Wallet] Freighter bağlandı:", addr);
+        } catch (error) {
+            console.error("❌ [Wallet] Bağlantı hatası:", error.message);
+            throw error;
         } finally {
             setLoading(false);
         }
-    }, [isFreighter]);
+    }, []);
 
     const disconnect = useCallback(() => {
         setAddress("");
@@ -65,8 +74,8 @@ export function useWallet() {
         connected,
         isFreighter,
         loading,
+        checking,
         connect,
         disconnect,
-        isMock: connected && !isFreighter,
     };
 }

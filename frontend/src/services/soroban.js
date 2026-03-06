@@ -1,64 +1,24 @@
 /**
- * RentLock — Soroban Servis Katmanı
+ * RentLock — Stellar Soroban Kontrat Servisi
  *
- * Kontrat bağlantısı yoksa mock data ile çalışır.
- * Gerçek kontrat bağlantısı varsa Stellar SDK kullanır.
+ * Gerçek Stellar Testnet kontratına bağlanır.
+ * Mock data KULLANMAZ — tüm veriler zincirden gelir.
+ * Freighter cüzdan ile transaction imzalama.
  */
 
-// ─── Mock Data ──────────────────────────────────────
+import * as StellarSdk from "@stellar/stellar-sdk";
+import * as rpc from "@stellar/stellar-sdk/rpc";
 
-const MOCK_EQUIPMENTS = [
-    {
-        rental_id: 1,
-        equipment_id: "DRONE-DJI-001",
-        owner: "GBXYZ...OWNER1",
-        renter: "",
-        daily_price: 15_0000000, // 15 USDC
-        deposit_amount: 100_0000000, // 100 USDC
-        status: 0, // Created
-        start_time: 0,
-        proof_hash: "0".repeat(64),
-        return_hash: "0".repeat(64),
-    },
-    {
-        rental_id: 2,
-        equipment_id: "CAMERA-SONY-A7",
-        owner: "GBXYZ...OWNER1",
-        renter: "GCABC...RENTER1",
-        daily_price: 25_0000000, // 25 USDC
-        deposit_amount: 200_0000000, // 200 USDC
-        status: 2, // Active
-        start_time: Math.floor(Date.now() / 1000) - 86400, // 1 gün önce
-        proof_hash: "a1b2c3d4e5f6".padEnd(64, "0"),
-        return_hash: "0".repeat(64),
-    },
-    {
-        rental_id: 3,
-        equipment_id: "LENS-CANON-70-200",
-        owner: "GBXYZ...OWNER2",
-        renter: "GCABC...RENTER2",
-        daily_price: 10_0000000, // 10 USDC
-        deposit_amount: 80_0000000, // 80 USDC
-        status: 1, // Deposited
-        start_time: 0,
-        proof_hash: "0".repeat(64),
-        return_hash: "0".repeat(64),
-    },
-];
+// ─── Sabitler ───────────────────────────────────────────
 
-const MOCK_EVENTS = [
-    { type: "RentalCreated", rental_id: 1, time: Date.now() - 300000, detail: "DRONE-DJI-001 listelendi" },
-    { type: "DepositMade", rental_id: 3, time: Date.now() - 240000, detail: "80 USDC depozito kilitledi" },
-    { type: "RentalCreated", rental_id: 2, time: Date.now() - 180000, detail: "CAMERA-SONY-A7 listelendi" },
-    { type: "DepositMade", rental_id: 2, time: Date.now() - 120000, detail: "200 USDC depozito kilitledi" },
-    { type: "RentalStarted", rental_id: 2, time: Date.now() - 60000, detail: "Kiralama başladı" },
-];
+const CONTRACT_ID = "CCAASSOQIDBRZYLQVNPT3W77UU5GPTYSI4PYAD6X5XFGOLRHZWIH2NIY";
+const RPC_URL = "https://soroban-testnet.stellar.org";
+const NETWORK_PASSPHRASE = StellarSdk.Networks.TESTNET;
 
-let mockData = [...MOCK_EQUIPMENTS];
-let mockEvents = [...MOCK_EVENTS];
-let nextId = 4;
+/** Soroban RPC sunucusu */
+const server = new rpc.Server(RPC_URL);
 
-// ─── Status Helpers ─────────────────────────────────
+// ─── Durum ve Yardımcılar ───────────────────────────────
 
 export const STATUS_MAP = {
     0: { label: "Oluşturuldu", color: "bg-blue-500/20 text-blue-400", icon: "📋" },
@@ -69,7 +29,7 @@ export const STATUS_MAP = {
 };
 
 export function formatUSDC(amount) {
-    return (amount / 10_000_000).toFixed(2);
+    return (Number(amount) / 10_000_000).toFixed(2);
 }
 
 export function formatAddress(addr) {
@@ -85,94 +45,382 @@ export function timeAgo(timestamp) {
     return `${Math.floor(seconds / 86400)}g önce`;
 }
 
-// ─── Mock API Functions ─────────────────────────────
+// ─── Event takibi (lokal — başarılı tx'lerden oluşur) ───
 
-export async function getEquipments() {
-    // Simulate network delay
-    await new Promise((r) => setTimeout(r, 300));
-    return [...mockData];
-}
-
-export async function createRental(equipmentId, dailyPrice, depositAmount) {
-    await new Promise((r) => setTimeout(r, 500));
-    const rental = {
-        rental_id: nextId++,
-        equipment_id: equipmentId,
-        owner: "GBXYZ...YOU",
-        renter: "",
-        daily_price: Math.round(dailyPrice * 10_000_000),
-        deposit_amount: Math.round(depositAmount * 10_000_000),
-        status: 0,
-        start_time: 0,
-        proof_hash: "0".repeat(64),
-        return_hash: "0".repeat(64),
-    };
-    mockData.push(rental);
-    addEvent("RentalCreated", rental.rental_id, `${equipmentId} listelendi`);
-    return rental;
-}
-
-export async function depositRental(rentalId) {
-    await new Promise((r) => setTimeout(r, 800));
-    const rental = mockData.find((r) => r.rental_id === rentalId);
-    if (!rental) throw new Error("Kiralama bulunamadı");
-    if (rental.status !== 0) throw new Error("Bu kiralama depozito için uygun değil");
-    rental.status = 1;
-    rental.renter = "GCABC...YOU";
-    addEvent("DepositMade", rentalId, `${formatUSDC(rental.deposit_amount)} USDC depozito kilitledi`);
-    return rental;
-}
-
-export async function startRental(rentalId) {
-    await new Promise((r) => setTimeout(r, 600));
-    const rental = mockData.find((r) => r.rental_id === rentalId);
-    if (!rental) throw new Error("Kiralama bulunamadı");
-    if (rental.status !== 1) throw new Error("Bu kiralama başlatmak için uygun değil");
-    rental.status = 2;
-    rental.start_time = Math.floor(Date.now() / 1000);
-    addEvent("RentalStarted", rentalId, `Kiralama başladı`);
-    return rental;
-}
-
-export async function endRental(rentalId, isDisputed = false) {
-    await new Promise((r) => setTimeout(r, 1000));
-    const rental = mockData.find((r) => r.rental_id === rentalId);
-    if (!rental) throw new Error("Kiralama bulunamadı");
-    if (rental.status !== 2) throw new Error("Bu kiralama sonlandırmak için uygun değil");
-
-    if (isDisputed) {
-        rental.status = 4;
-        rental.return_hash = "ff".repeat(32);
-        addEvent("DisputeOpened", rentalId, `Hash uyuşmazlığı — depozito sahibine aktarıldı`);
-    } else {
-        rental.status = 3;
-        rental.return_hash = rental.proof_hash;
-        addEvent("RentalEnded", rentalId, `Kiralama tamamlandı — depozito iade edildi`);
-    }
-    return rental;
-}
-
-export async function submitProof(rentalId) {
-    await new Promise((r) => setTimeout(r, 700));
-    const rental = mockData.find((r) => r.rental_id === rentalId);
-    if (!rental) throw new Error("Kiralama bulunamadı");
-    const hash = Array.from(crypto.getRandomValues(new Uint8Array(32)))
-        .map((b) => b.toString(16).padStart(2, "0"))
-        .join("");
-    rental.proof_hash = hash;
-    addEvent("ProofSubmitted", rentalId, `Teslim kanıtı kaydedildi`);
-    return rental;
-}
-
-export async function getRentalStatus(rentalId) {
-    await new Promise((r) => setTimeout(r, 200));
-    return mockData.find((r) => r.rental_id === rentalId) || null;
-}
+let localEvents = [];
 
 export function getEvents() {
-    return [...mockEvents].sort((a, b) => b.time - a.time).slice(0, 5);
+    return [...localEvents].sort((a, b) => b.time - a.time).slice(0, 10);
 }
 
 function addEvent(type, rentalId, detail) {
-    mockEvents.push({ type, rental_id: rentalId, time: Date.now(), detail });
+    localEvents.push({ type, rental_id: rentalId, time: Date.now(), detail });
+}
+
+// ─── ScVal Dönüşüm Yardımcıları ────────────────────────
+
+function toScAddress(publicKey) {
+    return new StellarSdk.Address(publicKey).toScVal();
+}
+
+function toScString(value) {
+    return StellarSdk.nativeToScVal(value, { type: "string" });
+}
+
+function toScU64(value) {
+    return StellarSdk.nativeToScVal(BigInt(value), { type: "u64" });
+}
+
+function toScI128(value) {
+    return StellarSdk.nativeToScVal(BigInt(value), { type: "i128" });
+}
+
+function toScBytes32(hexOrBytes) {
+    let bytes;
+    if (typeof hexOrBytes === "string") {
+        bytes = new Uint8Array(hexOrBytes.match(/.{2}/g).map((b) => parseInt(b, 16)));
+    } else {
+        bytes = hexOrBytes;
+    }
+    return StellarSdk.xdr.ScVal.scvBytes(bytes);
+}
+
+// ─── ScVal → JS Parse ───────────────────────────────────
+
+function parseScVal(scVal) {
+    if (!scVal) return null;
+    const type = scVal.switch().name;
+
+    switch (type) {
+        case "scvVoid":
+            return null;
+        case "scvBool":
+            return scVal.b();
+        case "scvU32":
+            return scVal.u32();
+        case "scvI32":
+            return scVal.i32();
+        case "scvU64":
+            return Number(scVal.u64());
+        case "scvI64":
+            return Number(scVal.i64());
+        case "scvU128": {
+            const parts = scVal.u128();
+            return Number(parts.lo()) + Number(parts.hi()) * 2n ** 64n;
+        }
+        case "scvI128": {
+            const parts = scVal.i128();
+            return Number(parts.lo()) + Number(parts.hi()) * 2n ** 64n;
+        }
+        case "scvString":
+            return scVal.str().toString();
+        case "scvSymbol":
+            return scVal.sym().toString();
+        case "scvBytes":
+            return Array.from(scVal.bytes())
+                .map((b) => b.toString(16).padStart(2, "0"))
+                .join("");
+        case "scvAddress": {
+            try {
+                return StellarSdk.Address.fromScVal(scVal).toString();
+            } catch {
+                return "unknown";
+            }
+        }
+        case "scvMap": {
+            const obj = {};
+            for (const entry of scVal.map()) {
+                const key = parseScVal(entry.key());
+                obj[key] = parseScVal(entry.val());
+            }
+            return obj;
+        }
+        case "scvVec": {
+            return scVal.vec().map(parseScVal);
+        }
+        default:
+            return `[${type}]`;
+    }
+}
+
+// ─── Transaction Oluşturma & İmzalama ──────────────────
+
+/**
+ * Kontrat çağrısı transaction'ı oluşturur, simüle eder,
+ * Freighter ile imzalatır ve ağa gönderir.
+ *
+ * @param {string} functionName — Kontrat fonksiyon adı
+ * @param {Array} args — ScVal argümanları
+ * @param {string} publicKey — İmzacı public key (Freighter'dan)
+ * @returns {Promise<any>} Transaction sonucu
+ */
+async function callContract(functionName, args, publicKey) {
+    console.log(`📡 [Soroban] Kontrat çağrısı: ${functionName}`);
+
+    try {
+        // 1. Hesap bilgilerini al
+        const account = await server.getAccount(publicKey);
+
+        // 2. Transaction oluştur
+        const contract = new StellarSdk.Contract(CONTRACT_ID);
+        const tx = new StellarSdk.TransactionBuilder(account, {
+            fee: StellarSdk.BASE_FEE,
+            networkPassphrase: NETWORK_PASSPHRASE,
+        })
+            .addOperation(contract.call(functionName, ...args))
+            .setTimeout(60)
+            .build();
+
+        // 3. Simüle et
+        console.log(`⏳ [Soroban] Simülasyon yapılıyor...`);
+        const simulated = await server.simulateTransaction(tx);
+
+        if (rpc.Api.isSimulationError(simulated)) {
+            const errMsg = simulated.error || "Bilinmeyen simülasyon hatası";
+            console.error(`❌ [Soroban] Simülasyon hatası:`, errMsg);
+            throw new Error(`Kontrat hatası: ${errMsg}`);
+        }
+
+        // 4. Simülasyon sonucuyla transaction'ı hazırla
+        const assembled = rpc.assembleTransaction(tx, simulated);
+        const preparedXdr = assembled.build().toXDR();
+
+        // 5. Freighter ile imzala
+        console.log(`🔏 [Soroban] Freighter imza isteniyor...`);
+        const { signedTxXdr } = await window.freighterApi.signTransaction(preparedXdr, {
+            networkPassphrase: NETWORK_PASSPHRASE,
+        });
+
+        // 6. İmzalı transaction'ı ağa gönder
+        console.log(`🚀 [Soroban] Transaction gönderiliyor...`);
+        const signedTx = StellarSdk.TransactionBuilder.fromXDR(
+            signedTxXdr,
+            NETWORK_PASSPHRASE
+        );
+        const sendResponse = await server.sendTransaction(signedTx);
+
+        if (sendResponse.status === "ERROR") {
+            console.error(`❌ [Soroban] Gönderim hatası:`, sendResponse);
+            throw new Error("Transaction gönderim hatası");
+        }
+
+        // 7. Sonucu bekle
+        console.log(`⏳ [Soroban] Onay bekleniyor... Hash: ${sendResponse.hash}`);
+        const result = await waitForTransaction(sendResponse.hash);
+
+        console.log(`✅ [Soroban] ${functionName} başarılı! Hash: ${sendResponse.hash}`);
+        return result;
+    } catch (error) {
+        console.error(`❌ [Soroban] ${functionName} başarısız:`, error.message);
+        throw error;
+    }
+}
+
+/**
+ * Read-only kontrat sorgusu — Freighter imzası gerekmez.
+ * Sadece simülasyon yapar, transaction göndermez.
+ *
+ * @param {string} functionName — Kontrat fonksiyon adı
+ * @param {Array} args — ScVal argümanları
+ * @param {string} publicKey — Kaynak hesap (fee hesabı için)
+ * @returns {Promise<any>} Parse edilmiş sonuç
+ */
+async function queryContract(functionName, args, publicKey) {
+    try {
+        const account = await server.getAccount(publicKey);
+        const contract = new StellarSdk.Contract(CONTRACT_ID);
+
+        const tx = new StellarSdk.TransactionBuilder(account, {
+            fee: StellarSdk.BASE_FEE,
+            networkPassphrase: NETWORK_PASSPHRASE,
+        })
+            .addOperation(contract.call(functionName, ...args))
+            .setTimeout(30)
+            .build();
+
+        const simulated = await server.simulateTransaction(tx);
+
+        if (rpc.Api.isSimulationError(simulated)) {
+            return null; // Veri bulunamadı (örn: olmayan rental ID)
+        }
+
+        return simulated.result?.retval ? parseScVal(simulated.result.retval) : null;
+    } catch (error) {
+        console.error(`❌ [Soroban] ${functionName} sorgusu başarısız:`, error.message);
+        return null;
+    }
+}
+
+/**
+ * Transaction onayını bekler (polling).
+ */
+async function waitForTransaction(hash) {
+    const maxAttempts = 30;
+    const delay = 2000;
+
+    for (let i = 0; i < maxAttempts; i++) {
+        try {
+            const result = await server.getTransaction(hash);
+            if (result.status === "SUCCESS") return result;
+            if (result.status === "FAILED") {
+                throw new Error(`Transaction başarısız oldu`);
+            }
+        } catch (error) {
+            if (error.message?.includes("başarısız")) throw error;
+        }
+        console.log(`⏳ [Soroban] Bekleniyor... (${i + 1}/${maxAttempts})`);
+        await new Promise((r) => setTimeout(r, delay));
+    }
+
+    throw new Error("Transaction zaman aşımı");
+}
+
+// ─── Public API: Kontrat Fonksiyonları ──────────────────
+
+/**
+ * Kontratdaki tüm kiralamaları okur.
+ * Sıralı get_status çağrılarıyla ID 1'den başlayarak tarar.
+ *
+ * @param {string} publicKey — Sorgulayan hesap
+ * @returns {Promise<Array>} Kiralama listesi
+ */
+export async function getEquipments(publicKey) {
+    if (!publicKey) return [];
+    console.log(`🔍 [Soroban] Kiralama listesi çekiliyor...`);
+
+    const rentals = [];
+
+    for (let id = 1; id <= 50; id++) {
+        const result = await queryContract("get_status", [toScU64(id)], publicKey);
+        if (!result) break; // Bu ID'de kiralama yok → son
+
+        // Parse edilen struct'a rental_id ekle
+        result.rental_id = id;
+
+        // Status alanını sayıya çevir (enum variant olabilir)
+        if (typeof result.status === "string") {
+            const statusNames = ["Created", "Deposited", "Active", "Completed", "Disputed"];
+            result.status = statusNames.indexOf(result.status);
+            if (result.status === -1) result.status = 0;
+        }
+
+        rentals.push(result);
+    }
+
+    console.log(`✅ [Soroban] ${rentals.length} kiralama bulundu`);
+    return rentals;
+}
+
+/**
+ * Yeni kiralama oluşturur — create_rental kontrat çağrısı.
+ * Freighter imza ister.
+ */
+export async function createRental(publicKey, equipmentId, dailyPrice, depositAmount) {
+    const args = [
+        toScAddress(publicKey),
+        toScString(equipmentId),
+        toScI128(Math.round(dailyPrice * 10_000_000)),
+        toScI128(Math.round(depositAmount * 10_000_000)),
+    ];
+
+    const result = await callContract("create_rental", args, publicKey);
+    addEvent("RentalCreated", "?", `${equipmentId} listelendi`);
+    return result;
+}
+
+/**
+ * Depozito yatırır — deposit kontrat çağrısı.
+ * Kiracının USDC'si kontrata kilitlenir.
+ */
+export async function depositRental(publicKey, rentalId) {
+    const args = [
+        toScAddress(publicKey),
+        toScU64(rentalId),
+    ];
+
+    const result = await callContract("deposit", args, publicKey);
+    addEvent("DepositMade", rentalId, `Depozito kilitledi`);
+    return result;
+}
+
+/**
+ * Kiralamayı başlatır — start_rental kontrat çağrısı.
+ * Ekipman sahibi tarafından çağrılır.
+ */
+export async function startRental(publicKey, rentalId) {
+    const args = [
+        toScAddress(publicKey),
+        toScU64(rentalId),
+    ];
+
+    const result = await callContract("start_rental", args, publicKey);
+    addEvent("RentalStarted", rentalId, `Kiralama başladı`);
+    return result;
+}
+
+/**
+ * Teslim kanıtı gönderir — submit_proof kontrat çağrısı.
+ * Rastgele bir SHA-256 hash üretir (demo amaçlı).
+ */
+export async function submitProof(publicKey, rentalId) {
+    // Demo: rastgele 32 byte hash üret
+    const randomHash = new Uint8Array(32);
+    crypto.getRandomValues(randomHash);
+    const hashHex = Array.from(randomHash)
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+
+    const args = [
+        toScAddress(publicKey),
+        toScU64(rentalId),
+        toScBytes32(randomHash),
+    ];
+
+    const result = await callContract("submit_proof", args, publicKey);
+    addEvent("ProofSubmitted", rentalId, `Hash: ${hashHex.slice(0, 16)}...`);
+    return result;
+}
+
+/**
+ * Kiralamayı sonlandırır — end_rental kontrat çağrısı.
+ * isDisputed=true ise farklı hash gönderir (anlaşmazlık simülasyonu).
+ */
+export async function endRental(publicKey, rentalId, isDisputed = false) {
+    let returnHash;
+    if (isDisputed) {
+        // Farklı hash → anlaşmazlık
+        returnHash = new Uint8Array(32);
+        crypto.getRandomValues(returnHash);
+    } else {
+        // Aynı hash'i almak için kontratdan oku
+        const rental = await queryContract("get_status", [toScU64(rentalId)], publicKey);
+        if (rental && rental.proof_hash) {
+            returnHash = new Uint8Array(
+                rental.proof_hash.match(/.{2}/g).map((b) => parseInt(b, 16))
+            );
+        } else {
+            returnHash = new Uint8Array(32);
+        }
+    }
+
+    const args = [
+        toScAddress(publicKey),
+        toScU64(rentalId),
+        toScBytes32(returnHash),
+    ];
+
+    const result = await callContract("end_rental", args, publicKey);
+    if (isDisputed) {
+        addEvent("DisputeOpened", rentalId, `Hash uyuşmazlığı — depozito sahibine`);
+    } else {
+        addEvent("RentalEnded", rentalId, `Kiralama tamamlandı — depozito iade`);
+    }
+    return result;
+}
+
+/**
+ * Tek bir kiralamanın durumunu sorgular.
+ */
+export async function getRentalStatus(publicKey, rentalId) {
+    return await queryContract("get_status", [toScU64(rentalId)], publicKey);
 }

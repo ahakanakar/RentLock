@@ -14,8 +14,9 @@ import RenterPanel from "./components/RenterPanel.jsx";
 
 export default function App() {
     const [role, setRole] = useState(null); // null | "owner" | "renter"
+    const [walletError, setWalletError] = useState("");
     const wallet = useWallet();
-    const contract = useContract();
+    const contract = useContract(wallet.address);
 
     // Çıkış: hem rolü sıfırla hem cüzdanı kes
     const handleLogout = () => {
@@ -56,22 +57,35 @@ export default function App() {
                                 <h2 className="text-xl font-bold text-white mb-2">Cüzdanını Bağla</h2>
                                 <p className="text-white/40 text-sm mb-6">
                                     Devam etmek için Freighter cüzdanınızı bağlayın.
-                                    Yüklü değilse demo modda çalışır.
+                                    Tüm işlemler Stellar Testnet üzerinde gerçekleşir.
                                 </p>
+                                {walletError && (
+                                    <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 mb-4 text-red-400 text-sm">
+                                        {walletError}
+                                    </div>
+                                )}
                                 <button
-                                    onClick={wallet.connect}
-                                    disabled={wallet.loading}
+                                    onClick={async () => {
+                                        setWalletError("");
+                                        try {
+                                            await wallet.connect();
+                                        } catch (err) {
+                                            setWalletError(err.message);
+                                        }
+                                    }}
+                                    disabled={wallet.loading || wallet.checking}
                                     className="btn-primary text-lg px-10 py-4 w-full"
                                 >
-                                    {wallet.loading ? (
+                                    {wallet.loading || wallet.checking ? (
                                         <span className="animate-spin">⏳</span>
                                     ) : (
-                                        <>🔗 Cüzdan Bağla</>
+                                        <>🔗 Freighter ile Bağlan</>
                                     )}
                                 </button>
-                                <p className="text-white/15 text-xs mt-4">
-                                    Freighter yüklü değilse mock modda çalışır
-                                </p>
+                                <a href="https://freighter.app" target="_blank" rel="noopener noreferrer"
+                                    className="block text-stellar-400/50 hover:text-stellar-400 text-xs mt-4 transition-colors">
+                                    Freighter cüzdanı yüklü değil mi? → freighter.app
+                                </a>
                             </div>
                         ) : (
                             /* Adım 2: Rol Seçimi */
@@ -84,11 +98,9 @@ export default function App() {
                                             ? `${wallet.address.slice(0, 6)}...${wallet.address.slice(-4)}`
                                             : wallet.address}
                                     </span>
-                                    {wallet.isMock && (
-                                        <span className="px-2 py-0.5 rounded-md bg-yellow-500/10 text-yellow-400 text-[10px] font-semibold border border-yellow-500/20">
-                                            MOCK
-                                        </span>
-                                    )}
+                                    <span className="px-2 py-0.5 rounded-md bg-stellar-500/10 text-stellar-400 text-[10px] font-semibold border border-stellar-500/20">
+                                        TESTNET
+                                    </span>
                                 </div>
 
                                 <h2 className="text-center text-lg font-semibold text-white/70 mb-5">
@@ -167,17 +179,15 @@ export default function App() {
                     <div className="flex items-center gap-3">
                         {/* Rol badge */}
                         <span className={`px-3 py-1 rounded-lg text-xs font-semibold border ${role === "owner"
-                                ? "bg-stellar-500/10 text-stellar-400 border-stellar-500/20"
-                                : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                            ? "bg-stellar-500/10 text-stellar-400 border-stellar-500/20"
+                            : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
                             }`}>
                             {role === "owner" ? "🏠 Kiraya Veren" : "🔑 Kiracı"}
                         </span>
 
-                        {wallet.isMock && (
-                            <span className="px-2 py-0.5 rounded-md bg-yellow-500/10 text-yellow-400 text-[10px] font-semibold border border-yellow-500/20">
-                                MOCK
-                            </span>
-                        )}
+                        <span className="px-2 py-0.5 rounded-md bg-stellar-500/10 text-stellar-400 text-[10px] font-semibold border border-stellar-500/20">
+                            TESTNET
+                        </span>
 
                         {/* Cüzdan adresi */}
                         <div className="glass px-4 py-2 flex items-center gap-2">
