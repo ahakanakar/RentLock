@@ -30,18 +30,25 @@ export function useContract(walletAddress) {
         }
     }, [walletAddress]);
 
-    // Kontratdan 5 saniyede bir polling
+    // Kontratdan 7 saniyede bir sıralı (overlap olmadan) polling
     useEffect(() => {
         if (!walletAddress) return;
 
-        fetchEquipments(); // İlk yükleme
+        let isActive = true;
 
-        pollingRef.current = setInterval(() => {
-            fetchEquipments();
-        }, 5000);
+        const poll = async () => {
+            if (!isActive) return;
+            await fetchEquipments();
+            if (isActive) {
+                pollingRef.current = setTimeout(poll, 7000); // 7s delay after finish
+            }
+        };
+
+        poll(); // İlk yükleme ve döngüyü başlat
 
         return () => {
-            if (pollingRef.current) clearInterval(pollingRef.current);
+            isActive = false;
+            if (pollingRef.current) clearTimeout(pollingRef.current);
         };
     }, [walletAddress, fetchEquipments]);
 
