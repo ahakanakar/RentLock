@@ -184,7 +184,7 @@ async function callContract(functionName, args, publicKey) {
 
         // 4. Simülasyon sonucuyla transaction'ı hazırla
         const assembled = rpc.assembleTransaction(tx, simulated);
-        const preparedXdr = assembled.build().toXDR();
+        const preparedXdr = assembled.build().toXDR("base64");
 
         // 5. Freighter ile imzala
         console.log(`🔏 [Soroban] Freighter imza isteniyor...`);
