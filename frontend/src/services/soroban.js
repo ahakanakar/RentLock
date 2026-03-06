@@ -396,13 +396,22 @@ export async function startRental(publicKey, rentalId) {
  *
  * @param {string} description — Kiracının iade açıklaması (serbest metin)
  */
-export async function submitProof(publicKey, rentalId, description) {
-    // Description + rentalId + timestamp'ten SHA-256 hash üret
-    const input = `${description || "return"}:${rentalId}:${Date.now()}`;
-    const hashBuffer = await crypto.subtle.digest(
-        "SHA-256",
-        new TextEncoder().encode(input)
-    );
+export async function submitProof(publicKey, rentalId, fileOrDescription) {
+    let hashBuffer;
+
+    if (fileOrDescription instanceof File || fileOrDescription instanceof Blob) {
+        // Dosyayı oku ve SHA-256 hash üret
+        const buffer = await fileOrDescription.arrayBuffer();
+        hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+    } else {
+        // Fallback: metinden hash üret
+        const input = `${fileOrDescription || "return"}:${rentalId}:${Date.now()}`;
+        hashBuffer = await crypto.subtle.digest(
+            "SHA-256",
+            new TextEncoder().encode(input)
+        );
+    }
+
     const proofHash = new Uint8Array(hashBuffer);
     const hashHex = Array.from(proofHash)
         .map((b) => b.toString(16).padStart(2, "0"))
@@ -415,7 +424,7 @@ export async function submitProof(publicKey, rentalId, description) {
     ];
 
     const result = await callContract("submit_proof", args, publicKey);
-    addEvent("ProofSubmitted", rentalId, `İade talebi: ${description?.slice(0, 30) || "—"}`);
+    addEvent("ProofSubmitted", rentalId, fileOrDescription instanceof File ? `İade fotoğrafı yüklendi` : `İade talebi alındı`);
     return { result, hashHex };
 }
 

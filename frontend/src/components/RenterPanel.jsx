@@ -22,6 +22,10 @@ export default function RenterPanel({ equipments, loading, onDeposit, onSubmitPr
     const [actionError, setActionError] = useState("");
     const [tick, setTick] = useState(0);
 
+    const [returnModalOpen, setReturnModalOpen] = useState(false);
+    const [selectedRentalId, setSelectedRentalId] = useState(null);
+    const [returnFile, setReturnFile] = useState(null);
+
     useEffect(() => {
         const id = setInterval(() => setTick((t) => t + 1), 1000);
         return () => clearInterval(id);
@@ -46,16 +50,30 @@ export default function RenterPanel({ equipments, loading, onDeposit, onSubmitPr
         setActionLoading(null);
     };
 
-    // İade: önce proof hash zincire yaz, sonra end_rental ile kapat
-    const handleReturn = async (rentalId) => {
-        setActionLoading(rentalId);
+    const openReturnModal = (rentalId) => {
+        setSelectedRentalId(rentalId);
+        setReturnFile(null);
+        setReturnModalOpen(true);
         setActionError("");
+    };
+
+    const handleReturnSubmit = async () => {
+        if (!selectedRentalId) return;
+        if (!returnFile) {
+            setActionError("Lütfen iade kanıtı için bir fotoğraf veya dosya seçin.");
+            return;
+        }
+
+        setActionLoading(selectedRentalId);
+        setActionError("");
+        setReturnModalOpen(false);
+
         try {
             if (onSubmitProof) {
-                await onSubmitProof(rentalId);
+                await onSubmitProof(selectedRentalId, returnFile);
             }
             if (onEndRental) {
-                await onEndRental(rentalId, false);
+                await onEndRental(selectedRentalId, false);
             }
         } catch (err) {
             setActionError(err.message || "İade işlemi başarısız");
@@ -219,6 +237,52 @@ export default function RenterPanel({ equipments, loading, onDeposit, onSubmitPr
                     </div>
                 )}
             </div>
+
+            {/* Fotoğraf Yükleme Modalı */}
+            {returnModalOpen && (
+                <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+                    <div className="bg-[#0b1021] border border-stellar-500/30 rounded-2xl w-full max-w-md p-6 relative shadow-2xl shadow-stellar-500/10">
+                        <button
+                            onClick={() => setReturnModalOpen(false)}
+                            className="absolute top-4 right-4 text-white/40 hover:text-white"
+                        >
+                            ✕
+                        </button>
+                        <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+                            <span>📸</span> İade Kanıtı Yükle
+                        </h3>
+                        <p className="text-white/50 text-sm mb-6">
+                            Ekipmanı iade ettiğinizi kanıtlamak için bir fotoğraf yükleyin. Fotoğrafın kriptografik özeti (hash) güvenlik için blok zincirine kaydedilecektir.
+                        </p>
+
+                        <div className="mb-6">
+                            <label className="block text-sm font-medium text-white/70 mb-2">Fotoğraf Seç</label>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => setReturnFile(e.target.files?.[0] || null)}
+                                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-stellar-500 transition-colors file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-stellar-500/20 file:text-stellar-400 hover:file:bg-stellar-500/30"
+                            />
+                        </div>
+
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setReturnModalOpen(false)}
+                                className="flex-1 px-4 py-3 rounded-xl border border-white/10 text-white/70 hover:bg-white/5 hover:text-white transition-all font-semibold"
+                            >
+                                İptal
+                            </button>
+                            <button
+                                onClick={handleReturnSubmit}
+                                disabled={actionLoading === selectedRentalId}
+                                className="flex-1 btn-primary py-3"
+                            >
+                                {actionLoading === selectedRentalId ? <span className="animate-spin">⏳</span> : "Kanıtı Yükle & İade Et"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
