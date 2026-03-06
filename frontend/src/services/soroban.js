@@ -183,24 +183,27 @@ async function callContract(functionName, args, publicKey) {
         }
 
         // 4. Simülasyon sonucuyla transaction'ı hazırla
-        const assembled = rpc.assembleTransaction(tx, simulated);
-        const preparedXdr = assembled.build().toXDR("base64");
+        // assembleTransaction → TransactionBuilder döndürür → .build() ile Transaction
+        const assembledBuilder = rpc.assembleTransaction(tx, simulated);
+        const preparedTx = assembledBuilder.build();
+        const preparedXdr = preparedTx.toXDR("base64");
 
-        // 5. Freighter ile imzala
+        // 5. Freighter ile imzala (base64 XDR string bekler)
         console.log(`🔏 [Soroban] Freighter imza isteniyor...`);
         const signResult = await signTransaction(preparedXdr, {
             networkPassphrase: NETWORK_PASSPHRASE,
         });
-        // v2 API: result nesne veya string olabilir
-        const signedTxXdr = typeof signResult === "object" ? signResult.signedTxXdr : signResult;
+        // v1/v2 API: result nesne ({ signedTxXdr }) veya doğrudan string olabilir
+        const signedTxXdr =
+            signResult && typeof signResult === "object" && signResult.signedTxXdr
+                ? signResult.signedTxXdr
+                : typeof signResult === "string"
+                    ? signResult
+                    : (() => { throw new Error("Freighter'dan geçerli bir imza alınamadı"); })();
 
-        // 6. İmzalı transaction'ı ağa gönder
+        // 6. İmzalı XDR string'i doğrudan ağa gönder (re-parse gerekmez)
         console.log(`🚀 [Soroban] Transaction gönderiliyor...`);
-        const signedTx = StellarSdk.TransactionBuilder.fromXDR(
-            signedTxXdr,
-            NETWORK_PASSPHRASE
-        );
-        const sendResponse = await server.sendTransaction(signedTx);
+        const sendResponse = await server.sendTransaction(signedTxXdr);
 
         if (sendResponse.status === "ERROR") {
             console.error(`❌ [Soroban] Gönderim hatası:`, sendResponse);
