@@ -6,7 +6,7 @@
  * - Status 2 (Aktif): canlı maliyet sayacı + iade butonu
  */
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { STATUS_MAP, formatUSDC, formatAddress } from "../services/soroban.js";
 
 // Anlık birikmiş maliyeti hesaplar (USDC, 2 ondalık)
@@ -19,10 +19,8 @@ function calcAccrued(rental) {
 }
 
 export default function RenterPanel({ equipments, loading, onDeposit, onEndRental, walletAddress }) {
-    const [selectedRental, setSelectedRental] = useState(null);
     const [actionLoading, setActionLoading] = useState(null);
     const [tick, setTick] = useState(0); // her saniye tetikler (canlı sayaç)
-    const fileInputRef = useRef(null);
 
     // Canlı maliyet sayacı — her saniye tick
     useEffect(() => {
@@ -169,10 +167,7 @@ export default function RenterPanel({ equipments, loading, onDeposit, onEndRenta
                                         <div className="shrink-0 flex flex-col gap-2">
                                             {rental.status === 2 && (
                                                 <button
-                                                    onClick={() => {
-                                                        setSelectedRental(rental.rental_id);
-                                                        fileInputRef.current?.click();
-                                                    }}
+                                                    onClick={() => handleReturn(rental.rental_id)}
                                                     disabled={loading || actionLoading === rental.rental_id}
                                                     className="btn-success text-sm !px-4 !py-2"
                                                 >
@@ -200,19 +195,6 @@ export default function RenterPanel({ equipments, loading, onDeposit, onEndRenta
                     </div>
                 )}
 
-                {/* Gizli dosya input — fotoğraf yükleme */}
-                <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => {
-                        if (e.target.files?.[0] && selectedRental) {
-                            handleReturn(selectedRental);
-                            e.target.value = "";
-                        }
-                    }}
-                />
             </div>
         </div>
     );
