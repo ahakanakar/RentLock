@@ -27,9 +27,14 @@ export function useContract() {
         }
     }, []);
 
-    // İlk yüklemede veriyi çek
+    // İlk yüklemede veriyi çek + her 5 saniyede bir kontratdan polling yap
+    // Bu sayede kiraya veren ekipman eklediğinde kiracı paneli 5sn içinde güncellenir
     useEffect(() => {
         fetchEquipments();
+        const pollInterval = setInterval(() => {
+            fetchEquipments();
+        }, 5000); // 5 saniyede bir kontratdan oku (polling)
+        return () => clearInterval(pollInterval);
     }, [fetchEquipments]);
 
     // Canlı sayaç — aktif kiralama ücretlerini saniyede bir güncelle
@@ -52,14 +57,6 @@ export function useContract() {
         }, 1000);
 
         return () => clearInterval(intervalRef.current);
-    }, []);
-
-    // Event'leri periyodik güncelle
-    useEffect(() => {
-        const ev = setInterval(() => {
-            setEvents(soroban.getEvents());
-        }, 2000);
-        return () => clearInterval(ev);
     }, []);
 
     // Yeni kiralama oluştur
