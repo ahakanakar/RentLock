@@ -1,7 +1,6 @@
 use soroban_sdk::contracterror;
 
 /// Kontrat hata kodları.
-/// Her hata benzersiz bir u32 değerine sahiptir.
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
@@ -22,4 +21,18 @@ pub enum ContractError {
     AlreadyInitialized = 7,
     /// Kontrat henüz initialize edilmemiş
     NotInitialized = 8,
+
+    // ─── Validator sistemi hataları ───────────────
+    /// Çağıran bu dispute için atanmış validatör değil
+    NotAValidator = 9,
+    /// Bu validatör bu dispute için zaten oy kullandı
+    AlreadyVoted = 10,
+    /// Validatör stake miktarı yetersiz (min 10 USDC)
+    InsufficientStake = 11,
+    /// Bu dispute zaten sonuçlandırıldı
+    DisputeAlreadyFinalized = 12,
+    /// Yeterli sayıda aktif validatör yok (min 3 gerekli)
+    NotEnoughValidators = 13,
+    /// Dispute bulunamadı
+    DisputeNotFound = 14,
 }
