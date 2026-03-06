@@ -451,3 +451,106 @@ export async function endRental(publicKey, rentalId, isDisputed = false) {
 export async function getRentalStatus(publicKey, rentalId) {
     return await queryContract("get_status", [toScU64(rentalId)], publicKey);
 }
+
+// ─── USDC Trustline Yardımcıları ─────────────────────────
+
+// Testnet USDC SAC bilgileri
+// CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIIHMXQDAMA SAC'ının
+// altındaki classic asset (genellikle Circle testnet USDC)
+const USDC_CODE = "USDC";
+// En yaygın testnet USDC issuer'ları — birinde hata alırsa diğerini dene
+const USDC_ISSUERS = [
+    "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN", // Circle testnet
+    "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", // Stellar testnet
+];
+const HORIZON_URL = "https://horizon-testnet.stellar.org";
+const horizonServer = new StellarSdk.Horizon.Server(HORIZON_URL);
+
+/**
+ * Kullanıcının USDC trustline'ı olup olmadığını kontrol eder.
+ * @returns {Promise<{ hasTrustline: boolean, balance: string | null }>}
+ */
+export async function checkUsdcTrustline(publicKey) {
+    try {
+        const account = await horizonServer.loadAccount(publicKey);
+        const usdcBalance = account.balances.find(
+            (b) => b.asset_type !== "native" && b.asset_code === "USDC"
+        );
+        return {
+            hasTrustline: !!usdcBalance,
+            balance: usdcBalance ? usdcBalance.balance : null,
+        };
+    } catch (err) {
+        console.error("❌ [Trustline] Hesap sorgulama hatası:", err.message);
+        return { hasTrustline: false, balance: null };
+    }
+}
+
+/**
+ * USDC trustline oluşturur (classic Stellar transaction — Soroban değil).
+ * Freighter imzası ister.
+ */
+export async function setupUsdcTrustline(publicKey) {
+    console.log("🔧 [Trustline] USDC trustline kurulumu başlıyor...");
+
+    // Hangi issuer'ı kullanacağız? Önce mevcut USDC assets'i kontrol et
+    let usdcAsset = null;
+    for (const issuer of USDC_ISSUERS) {
+        try {
+            const candidate = new StellarSdk.Asset(USDC_CODE, issuer);
+            // Bu issuer'ın testnet'te var olduğunu doğrula
+            await horizonServer.loadAccount(issuer);
+            usdcAsset = candidate;
+            console.log(`✅ [Trustline] USDC issuer bulundu: ${issuer}`);
+            break;
+        } catch {
+            console.log(`⚠️ [Trustline] Bu issuer bulunamadı, sonraki deneniyor...`);
+        }
+    }
+
+    if (!usdcAsset) {
+        throw new Error(
+            "Testnet USDC issuer bulunamadı. Lütfen Stellar Laboratuvarı'ndan manüel olarak trustline ekleyin."
+        );
+    }
+
+    // Classic Stellar hesap yükle (Horizon'dan)
+    const account = await horizonServer.loadAccount(publicKey);
+
+    // changeTrust işlemi (classic Stellar — Soroban RPC değil)
+    const tx = new StellarSdk.TransactionBuilder(account, {
+        fee: StellarSdk.BASE_FEE,
+        networkPassphrase: NETWORK_PASSPHRASE,
+    })
+        .addOperation(
+            StellarSdk.Operation.changeTrust({
+                asset: usdcAsset,
+                limit: "999999999", // Maximum trustline limiti
+            })
+        )
+        .setTimeout(30)
+        .build();
+
+    const xdrString = tx.toXDR("base64");
+    console.log("🔏 [Trustline] Freighter imza isteniyor...");
+
+    const signResult = await signTransaction(xdrString, {
+        networkPassphrase: NETWORK_PASSPHRASE,
+        network: "TESTNET",
+    });
+    const signedXdr =
+        signResult && typeof signResult === "object" && signResult.signedTxXdr
+            ? signResult.signedTxXdr
+            : typeof signResult === "string"
+                ? signResult
+                : (() => { throw new Error("Freighter imza hatası"); })();
+
+    // Horizon'a gönder (Soroban RPC değil — classic Stellar transaction)
+    const signedTx = StellarSdk.TransactionBuilder.fromXDR(signedXdr, NETWORK_PASSPHRASE);
+    console.log("🚀 [Trustline] Trustline transaction gönderiliyor...");
+    const result = await horizonServer.submitTransaction(signedTx);
+
+    console.log("✅ [Trustline] USDC trustline oluşturuldu! Hash:", result.hash);
+    addEvent("TrustlineCreated", "-", "USDC trustline açıldı");
+    return result;
+}

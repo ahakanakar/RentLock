@@ -255,6 +255,7 @@ export default function App() {
                         loading={contract.loading}
                         onDeposit={contract.deposit}
                         onEndRental={contract.endRental}
+                        walletAddress={wallet.address}
                     />
                 )}
             </main>
