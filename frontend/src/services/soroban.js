@@ -183,17 +183,18 @@ async function callContract(functionName, args, publicKey) {
         }
 
         // 4. Simülasyon sonucuyla transaction'ı hazırla
-        // assembleTransaction → TransactionBuilder döndürür → .build() ile Transaction
-        const assembledBuilder = rpc.assembleTransaction(tx, simulated);
-        const preparedTx = assembledBuilder.build();
+        // SDK v12: assembleTransaction → doğrudan Transaction döndürür (TransactionBuilder DEĞİL)
+        const preparedTx = rpc.assembleTransaction(tx, simulated);
         const preparedXdr = preparedTx.toXDR("base64");
+        console.log(`📦 [Soroban] Hazırlanan XDR uzunluğu: ${preparedXdr.length}`);
 
         // 5. Freighter ile imzala (base64 XDR string bekler)
         console.log(`🔏 [Soroban] Freighter imza isteniyor...`);
         const signResult = await signTransaction(preparedXdr, {
             networkPassphrase: NETWORK_PASSPHRASE,
         });
-        // v1/v2 API: result nesne ({ signedTxXdr }) veya doğrudan string olabilir
+
+        // v1/v2 API: { signedTxXdr } nesnesi veya doğrudan string olabilir
         const signedTxXdr =
             signResult && typeof signResult === "object" && signResult.signedTxXdr
                 ? signResult.signedTxXdr
@@ -201,9 +202,15 @@ async function callContract(functionName, args, publicKey) {
                     ? signResult
                     : (() => { throw new Error("Freighter'dan geçerli bir imza alınamadı"); })();
 
-        // 6. İmzalı XDR string'i doğrudan ağa gönder (re-parse gerekmez)
+        console.log(`✍️ [Soroban] İmzalı XDR alındı (${signedTxXdr.length} karakter)`);
+
+        // 6. İmzalı XDR'ı Transaction nesnesine çevir ve ağa gönder
+        const signedTx = StellarSdk.TransactionBuilder.fromXDR(
+            signedTxXdr,
+            NETWORK_PASSPHRASE
+        );
         console.log(`🚀 [Soroban] Transaction gönderiliyor...`);
-        const sendResponse = await server.sendTransaction(signedTxXdr);
+        const sendResponse = await server.sendTransaction(signedTx);
 
         if (sendResponse.status === "ERROR") {
             console.error(`❌ [Soroban] Gönderim hatası:`, sendResponse);
