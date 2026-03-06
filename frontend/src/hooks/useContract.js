@@ -26,7 +26,7 @@ export function useContract(walletAddress) {
             setEquipments(data);
             setEvents(soroban.getEvents());
         } catch (err) {
-            console.error("❌ [Contract] Fetch hatası:", err.message);
+            console.error("❌ [Contract] Fetch error:", err.message);
         }
     }, [walletAddress]);
 

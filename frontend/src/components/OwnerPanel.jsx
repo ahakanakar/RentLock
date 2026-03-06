@@ -74,7 +74,7 @@ export default function OwnerPanel({
         try {
             await fn(rentalId);
         } catch (err) {
-            setActionError(err.message || "İşlem başarısız oldu");
+            setActionError(err.message || "Action failed");
         } finally {
             setActionLoading(null);
         }
@@ -101,17 +101,17 @@ export default function OwnerPanel({
                     <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[400px] h-[200px] bg-stellar-500/5 rounded-full blur-[100px]" />
                     <div className="relative">
                         <h2 className="text-base font-bold text-white mb-1 flex items-center gap-2">
-                            <span className="text-xl">💹</span> Canlı Ödeme Akışı
+                            <span className="text-xl">💹</span> Live Payment Stream
                         </h2>
-                        <p className="text-white/30 text-xs mb-4">Aktif kiralamalarda biriken ücret</p>
+                        <p className="text-white/30 text-xs mb-4">Accrued fees from active rentals</p>
                         <div className="text-center py-2">
                             <div className="text-4xl font-extrabold bg-gradient-to-r from-stellar-400 via-stellar-300 to-emerald-400 bg-clip-text text-transparent mb-1 tabular-nums">
                                 ${displayAccrued.toFixed(6)}
                             </div>
-                            <div className="text-white/30 text-xs">USDC toplam</div>
+                            <div className="text-white/30 text-xs">total USDC</div>
                             <div className="flex items-center justify-center gap-2 mt-2">
                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                                <span className="text-emerald-400 text-xs">{activeRentals.length} aktif kiralama</span>
+                                <span className="text-emerald-400 text-xs">{activeRentals.length} active rentals</span>
                             </div>
                         </div>
                         {activeRentals.length > 0 && (
@@ -134,30 +134,30 @@ export default function OwnerPanel({
                 {/* Ekipman Ekleme Formu */}
                 <div className="glass p-6">
                     <h2 className="text-base font-bold text-white mb-1 flex items-center gap-2">
-                        <span className="text-xl">📦</span> Yeni Ekipman Ekle
+                        <span className="text-xl">📦</span> Add New Equipment
                     </h2>
-                    <p className="text-white/30 text-xs mb-4">Ekipmanınızı kiralık olarak listeleyin</p>
+                    <p className="text-white/30 text-xs mb-4">List your equipment for rent</p>
                     <form onSubmit={handleCreate} className="space-y-3">
                         <div>
-                            <label className="block text-white/50 text-xs mb-1">Ekipman Adı / ID</label>
-                            <input type="text" className="input-field !py-2.5 text-sm" placeholder="Örn: DRONE-DJI-MAVIC-3"
+                            <label className="block text-white/50 text-xs mb-1">Equipment Name / ID</label>
+                            <input type="text" className="input-field !py-2.5 text-sm" placeholder="e.g.: DRONE-DJI-MAVIC-3"
                                 value={equipmentId} onChange={(e) => setEquipmentId(e.target.value)} />
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                             <div>
-                                <label className="block text-white/50 text-xs mb-1">Günlük Fiyat (USDC)</label>
+                                <label className="block text-white/50 text-xs mb-1">Daily Price (USDC)</label>
                                 <input type="number" step="0.01" className="input-field !py-2.5 text-sm" placeholder="15.00"
                                     value={dailyPrice} onChange={(e) => setDailyPrice(e.target.value)} />
                             </div>
                             <div>
-                                <label className="block text-white/50 text-xs mb-1">Depozito (USDC)</label>
+                                <label className="block text-white/50 text-xs mb-1">Deposit (USDC)</label>
                                 <input type="number" step="0.01" className="input-field !py-2.5 text-sm" placeholder="100.00"
                                     value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} />
                             </div>
                         </div>
                         <button type="submit" disabled={creating || !equipmentId || !dailyPrice || !depositAmount}
                             className="btn-primary w-full text-sm !py-2.5 flex items-center justify-center gap-2">
-                            {creating ? <><span className="animate-spin">⏳</span> İşleniyor...</> : <>🚀 Ekipmanı Sisteme Ekle</>}
+                            {creating ? <><span className="animate-spin">⏳</span> Processing...</> : <>🚀 Add Equipment to System</>}
                         </button>
                     </form>
                 </div>
@@ -166,8 +166,8 @@ export default function OwnerPanel({
             {/* ─── Aktif Kiralamalar ─── */}
             <div className="glass p-6">
                 <h2 className="text-base font-bold text-white mb-4 flex items-center gap-2">
-                    <span className="text-xl">📋</span> Kiralamalarım
-                    <span className="ml-auto text-sm font-normal text-white/30">{equipments.length} kayıt</span>
+                    <span className="text-xl">📋</span> My Rentals
+                    <span className="ml-auto text-sm font-normal text-white/30">{equipments.length} records</span>
                 </h2>
                 {actionError && (
                     <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 mb-4 flex items-center gap-2 text-red-400 text-sm">
@@ -178,7 +178,7 @@ export default function OwnerPanel({
                 )}
                 {equipments.length === 0 ? (
                     <div className="text-center py-8 text-white/20">
-                        <p className="text-4xl mb-2">📭</p><p>Henüz kiralama yok</p>
+                        <p className="text-4xl mb-2">📭</p><p>No rentals yet</p>
                     </div>
                 ) : (
                     <div className="space-y-2">
@@ -193,8 +193,8 @@ export default function OwnerPanel({
                                             <span className={`status-badge text-[10px] ${status.color}`}>{status.label}</span>
                                         </div>
                                         <div className="flex gap-3 text-xs text-white/30">
-                                            <span>💵 {formatUSDC(rental.daily_price)}/gün</span>
-                                            <span>🔒 {formatUSDC(rental.deposit_amount)} depozito</span>
+                                            <span>💵 {formatUSDC(rental.daily_price)}/day</span>
+                                            <span>🔒 {formatUSDC(rental.deposit_amount)} deposit</span>
                                             {rental.renter && rental.status >= 1 && <span>👤 {formatAddress(rental.renter)}</span>}
                                         </div>
                                     </div>
@@ -208,7 +208,7 @@ export default function OwnerPanel({
                                             >
                                                 {actionLoading === rental.rental_id
                                                     ? <span className="animate-spin">⏳</span>
-                                                    : <>▶ Başlat</>}
+                                                    : <>▶ Start</>}
                                             </button>
                                         )}
                                         {/* Aktif + proof geldi → Onayla veya Reddet */}
@@ -221,21 +221,21 @@ export default function OwnerPanel({
                                                 >
                                                     {actionLoading === rental.rental_id
                                                         ? <span className="animate-spin">⏳</span>
-                                                        : <>✅ Onayla</>}
+                                                        : <>✅ Approve</>}
                                                 </button>
                                                 <button
                                                     onClick={() => handleAction(rental.rental_id, onOpenDispute)}
                                                     disabled={loading || actionLoading === rental.rental_id}
                                                     className="btn-danger text-xs !px-3 !py-1.5"
                                                 >
-                                                    ⚠️ Reddet
+                                                    ⚠️ Reject
                                                 </button>
                                             </>
                                         )}
                                         {/* Aktif + proof henüz gelmedi → bilgi */}
                                         {rental.status === 2 && rental.proof_hash === EMPTY_HASH && (
                                             <span className="text-white/25 text-xs px-2">
-                                                ⏳ İade bekleniyor
+                                                ⏳ Awaiting return
                                             </span>
                                         )}
                                     </div>
@@ -249,10 +249,10 @@ export default function OwnerPanel({
             {/* ─── Son Eventler ─── */}
             <div className="glass p-6">
                 <h2 className="text-base font-bold text-white mb-4 flex items-center gap-2">
-                    <span className="text-xl">⛓️</span> Son Zincir Eventleri
+                    <span className="text-xl">⛓️</span> Recent Chain Events
                 </h2>
                 {events.length === 0 ? (
-                    <div className="text-center py-4 text-white/20"><p>Henüz event yok</p></div>
+                    <div className="text-center py-4 text-white/20"><p>No events yet</p></div>
                 ) : (
                     <div className="space-y-1.5">
                         {events.map((event, i) => (

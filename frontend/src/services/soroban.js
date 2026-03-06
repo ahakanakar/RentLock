@@ -23,11 +23,11 @@ const server = new rpc.Server(RPC_URL);
 // ─── Durum ve Yardımcılar ───────────────────────────────
 
 export const STATUS_MAP = {
-    0: { label: "Oluşturuldu", color: "bg-blue-500/20 text-blue-400", icon: "📋" },
-    1: { label: "Depozito Yatırıldı", color: "bg-yellow-500/20 text-yellow-400", icon: "💰" },
-    2: { label: "Aktif", color: "bg-emerald-500/20 text-emerald-400", icon: "✅" },
-    3: { label: "Tamamlandı", color: "bg-gray-500/20 text-gray-400", icon: "🏁" },
-    4: { label: "Anlaşmazlık", color: "bg-red-500/20 text-red-400", icon: "⚠️" },
+    0: { label: "Created", color: "bg-blue-500/20 text-blue-400", icon: "📋" },
+    1: { label: "Deposited", color: "bg-yellow-500/20 text-yellow-400", icon: "💰" },
+    2: { label: "Active", color: "bg-emerald-500/20 text-emerald-400", icon: "✅" },
+    3: { label: "Completed", color: "bg-gray-500/20 text-gray-400", icon: "🏁" },
+    4: { label: "Disputed", color: "bg-red-500/20 text-red-400", icon: "⚠️" },
 };
 
 export function formatUSDC(amount) {
@@ -41,10 +41,10 @@ export function formatAddress(addr) {
 
 export function timeAgo(timestamp) {
     const seconds = Math.floor((Date.now() - timestamp) / 1000);
-    if (seconds < 60) return `${seconds}sn önce`;
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}dk önce`;
-    if (seconds < 86400) return `${Math.floor(seconds / 3600)}sa önce`;
-    return `${Math.floor(seconds / 86400)}g önce`;
+    if (seconds < 60) return `${seconds}s ago`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+    return `${Math.floor(seconds / 86400)}d ago`;
 }
 
 // ─── Event takibi (lokal — başarılı tx'lerden oluşur) ───
@@ -356,7 +356,7 @@ export async function createRental(publicKey, equipmentId, dailyPrice, depositAm
     ];
 
     const result = await callContract("create_rental", args, publicKey);
-    addEvent("RentalCreated", "?", `${equipmentId} listelendi`);
+    addEvent("RentalCreated", "?", `${equipmentId} listed`);
     return result;
 }
 
@@ -371,7 +371,7 @@ export async function depositRental(publicKey, rentalId) {
     ];
 
     const result = await callContract("deposit", args, publicKey);
-    addEvent("DepositMade", rentalId, `Depozito kilitledi`);
+    addEvent("DepositMade", rentalId, `Deposit locked`);
     return result;
 }
 
@@ -386,7 +386,7 @@ export async function startRental(publicKey, rentalId) {
     ];
 
     const result = await callContract("start_rental", args, publicKey);
-    addEvent("RentalStarted", rentalId, `Kiralama başladı`);
+    addEvent("RentalStarted", rentalId, `Rental started`);
     return result;
 }
 
@@ -424,7 +424,7 @@ export async function submitProof(publicKey, rentalId, fileOrDescription) {
     ];
 
     const result = await callContract("submit_proof", args, publicKey);
-    addEvent("ProofSubmitted", rentalId, fileOrDescription instanceof File ? `İade fotoğrafı yüklendi` : `İade talebi alındı`);
+    addEvent("ProofSubmitted", rentalId, fileOrDescription instanceof File ? `Return photo uploaded` : `Return requested`);
     return { result, hashHex };
 }
 
@@ -475,9 +475,9 @@ export async function endRental(publicKey, rentalId, isDisputed = false) {
 
     const result = await callContract("end_rental", args, publicKey);
     if (isDisputed) {
-        addEvent("DisputeOpened", rentalId, `Hash uyuşmazlığı — depozito sahibine`);
+        addEvent("DisputeOpened", rentalId, `Hash mismatch — deposit to owner`);
     } else {
-        addEvent("RentalEnded", rentalId, `Kiralama tamamlandı — depozito iade`);
+        addEvent("RentalEnded", rentalId, `Rental completed — deposit returned`);
     }
     return result;
 }
@@ -588,7 +588,7 @@ export async function setupUsdcTrustline(publicKey) {
     const result = await horizonServer.submitTransaction(signedTx);
 
     console.log("✅ [Trustline] USDC trustline oluşturuldu! Hash:", result.hash);
-    addEvent("TrustlineCreated", "-", "USDC trustline açıldı");
+    addEvent("TrustlineCreated", "-", "USDC trustline opened");
     return result;
 }
 

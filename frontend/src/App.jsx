@@ -18,7 +18,7 @@ export default function App() {
     const wallet = useWallet();
     const contract = useContract(wallet.address);
 
-    // Çıkış: hem rolü sıfırla hem cüzdanı kes
+    // Logout: reset role and disconnect wallet
     const handleLogout = () => {
         setRole(null);
         wallet.disconnect();
@@ -45,19 +45,19 @@ export default function App() {
                                 RentLock
                             </h1>
                             <p className="text-white/40 text-sm max-w-sm mx-auto leading-relaxed">
-                                Stellar Soroban üzerinde merkezi olmayan ekipman kiralama protokolü.
-                                Güvenli depozito, şeffaf ödeme, hash tabanlı kanıt sistemi.
+                                Decentralized equipment rental protocol on Stellar Soroban.
+                                Secure deposits, transparent payments, and hash-based proof system.
                             </p>
                         </div>
 
-                        {/* Adım 1: Cüzdan Bağlantısı */}
+                        {/* Step 1: Connect Wallet */}
                         {!wallet.connected ? (
                             <div className="glass p-8 text-center">
                                 <div className="text-3xl mb-4">🔗</div>
-                                <h2 className="text-xl font-bold text-white mb-2">Cüzdanını Bağla</h2>
+                                <h2 className="text-xl font-bold text-white mb-2">Connect Wallet</h2>
                                 <p className="text-white/40 text-sm mb-6">
-                                    Devam etmek için Freighter cüzdanınızı bağlayın.
-                                    Tüm işlemler Stellar Testnet üzerinde gerçekleşir.
+                                    Connect your Freighter wallet to continue.
+                                    All transactions occur on the Stellar Testnet.
                                 </p>
                                 {walletError && (
                                     <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 mb-4 text-red-400 text-sm">
@@ -66,13 +66,13 @@ export default function App() {
                                 )}
                                 {wallet.notInstalled && !wallet.checking && (
                                     <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl px-4 py-3 mb-4 text-left">
-                                        <p className="text-yellow-400 text-sm font-semibold mb-1">⚠️ Freighter cüzdan eklentisi bulunamadı</p>
+                                        <p className="text-yellow-400 text-sm font-semibold mb-1">⚠️ Freighter extension not found</p>
                                         <p className="text-yellow-400/60 text-xs mb-3">
-                                            RentLock'u kullanmak için Freighter tarayıcı eklentisini yüklemeniz gerekiyor.
+                                            You need to install the Freighter browser extension to use RentLock.
                                         </p>
                                         <a href="https://freighter.app" target="_blank" rel="noopener noreferrer"
                                             className="inline-block px-4 py-2 bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/30 rounded-lg text-yellow-400 text-sm font-semibold transition-colors">
-                                            📥 Freighter'ı İndir → freighter.app
+                                            📥 Download Freighter → freighter.app
                                         </a>
                                     </div>
                                 )}
@@ -89,22 +89,22 @@ export default function App() {
                                     className="btn-primary text-lg px-10 py-4 w-full"
                                 >
                                     {wallet.checking ? (
-                                        <>⏳ Freighter aranıyor...</>
+                                        <>⏳ Searching for Freighter...</>
                                     ) : wallet.loading ? (
                                         <span className="animate-spin">⏳</span>
                                     ) : (
-                                        <>🔗 Freighter ile Bağlan</>
+                                        <>🔗 Connect Freighter</>
                                     )}
                                 </button>
                                 {!wallet.notInstalled && (
                                     <a href="https://freighter.app" target="_blank" rel="noopener noreferrer"
                                         className="block text-stellar-400/50 hover:text-stellar-400 text-xs mt-4 transition-colors">
-                                        Freighter cüzdanı yüklü değil mi? → freighter.app
+                                        Don't have Freighter installed? → freighter.app
                                     </a>
                                 )}
                             </div>
                         ) : (
-                            /* Adım 2: Rol Seçimi */
+                            /* Step 2: Role Selection */
                             <div>
                                 {/* Bağlı cüzdan bilgisi */}
                                 <div className="flex items-center justify-center gap-2 mb-6">
@@ -120,11 +120,11 @@ export default function App() {
                                 </div>
 
                                 <h2 className="text-center text-lg font-semibold text-white/70 mb-5">
-                                    Rolünüzü seçin
+                                    Select your role
                                 </h2>
 
                                 <div className="grid grid-cols-2 gap-4">
-                                    {/* Kiraya Veren */}
+                                    {/* Owner */}
                                     <button
                                         onClick={() => setRole("owner")}
                                         className="glass-hover p-8 text-center group cursor-pointer"
@@ -132,13 +132,13 @@ export default function App() {
                                         <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-stellar-600/20 to-stellar-400/5 flex items-center justify-center text-3xl mb-4 border border-stellar-500/10 group-hover:border-stellar-500/30 group-hover:shadow-lg group-hover:shadow-stellar-500/10 transition-all">
                                             🏠
                                         </div>
-                                        <h3 className="text-lg font-bold text-white mb-1">Kiraya Veren</h3>
+                                        <h3 className="text-lg font-bold text-white mb-1">Equipment Owner</h3>
                                         <p className="text-white/30 text-xs leading-relaxed">
-                                            Ekipmanlarınızı listeleyin, kiralama sürecini yönetin
+                                            List your equipments and manage the rental process
                                         </p>
                                     </button>
 
-                                    {/* Kiracı */}
+                                    {/* Renter */}
                                     <button
                                         onClick={() => setRole("renter")}
                                         className="glass-hover p-8 text-center group cursor-pointer"
@@ -146,9 +146,9 @@ export default function App() {
                                         <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-emerald-600/20 to-emerald-400/5 flex items-center justify-center text-3xl mb-4 border border-emerald-500/10 group-hover:border-emerald-500/30 group-hover:shadow-lg group-hover:shadow-emerald-500/10 transition-all">
                                             🔑
                                         </div>
-                                        <h3 className="text-lg font-bold text-white mb-1">Kiracı</h3>
+                                        <h3 className="text-lg font-bold text-white mb-1">Renter</h3>
                                         <p className="text-white/30 text-xs leading-relaxed">
-                                            Ekipman kiralayın, depozito yatırın, iade edin
+                                            Rent equipments, deposit funds, and handle returns
                                         </p>
                                     </button>
                                 </div>
@@ -158,7 +158,7 @@ export default function App() {
                                     onClick={wallet.disconnect}
                                     className="w-full mt-4 py-2 text-sm text-white/20 hover:text-white/50 transition-colors text-center"
                                 >
-                                    Cüzdan bağlantısını kes
+                                    Disconnect Wallet
                                 </button>
                             </div>
                         )}
@@ -188,7 +188,7 @@ export default function App() {
                                 RentLock
                             </h1>
                             <p className="text-[10px] text-white/30 -mt-0.5 tracking-wider uppercase">
-                                {role === "owner" ? "Kiraya Veren Paneli" : "Kiracı Paneli"}
+                                {role === "owner" ? "Owner Dashboard" : "Renter Dashboard"}
                             </p>
                         </div>
                     </div>
@@ -198,7 +198,7 @@ export default function App() {
                         <span className={`px-3 py-1 rounded-lg text-xs font-semibold border ${role === "owner" ? "bg-stellar-500/10 text-stellar-400 border-stellar-500/20"
                             : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
                             }`}>
-                            {role === "owner" ? "🏠 Kiraya Veren" : "🔑 Kiracı"}
+                            {role === "owner" ? "🏠 Owner" : "🔑 Renter"}
                         </span>
 
                         <span className="px-2 py-0.5 rounded-md bg-stellar-500/10 text-stellar-400 text-[10px] font-semibold border border-stellar-500/20">
@@ -220,7 +220,7 @@ export default function App() {
                             onClick={handleLogout}
                             className="px-4 py-2 rounded-xl text-sm text-white/40 hover:text-white hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all"
                         >
-                            🚪 Çıkış
+                            🚪 Logout
                         </button>
                     </div>
                 </div>
