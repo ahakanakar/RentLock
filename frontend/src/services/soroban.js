@@ -7,7 +7,8 @@
  */
 
 import * as StellarSdk from "@stellar/stellar-sdk";
-import * as rpc from "@stellar/stellar-sdk/rpc";
+// rpc, aynı paket içinden import edilmeli (Vite module instance mismatch önlemek için)
+const rpc = StellarSdk.rpc;
 import { signTransaction } from "@stellar/freighter-api";
 
 // ─── Sabitler ───────────────────────────────────────────
@@ -106,12 +107,18 @@ function parseScVal(scVal) {
         case "scvI64":
             return Number(scVal.i64());
         case "scvU128": {
-            const parts = scVal.u128();
-            return Number(parts.lo()) + Number(parts.hi()) * 2n ** 64n;
+            // Tüm işlemi BigInt olarak yap, sonunda Number'a çevir
+            const u128 = scVal.u128();
+            const hi = BigInt(u128.hi().toString());
+            const lo = BigInt(u128.lo().toString());
+            return Number(hi * 2n ** 64n + lo);
         }
         case "scvI128": {
-            const parts = scVal.i128();
-            return Number(parts.lo()) + Number(parts.hi()) * 2n ** 64n;
+            // Signed — hi negatif olabilir
+            const i128 = scVal.i128();
+            const hi = BigInt(i128.hi().toString());
+            const lo = BigInt(i128.lo().toString());
+            return Number(hi * 2n ** 64n + lo);
         }
         case "scvString":
             return scVal.str().toString();
